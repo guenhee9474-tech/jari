@@ -233,7 +233,8 @@ textarea { min-height: 170px; resize: vertical; line-height: 1.5; font-size: 14p
       <label class="field">한 줄에 한 명: 번호 이름 (성별은 남/여, 있으면)
         <textarea id="fRoster" spellcheck="false" placeholder="1 김하늘 여&#10;2 이도윤 남"></textarea>
       </label>
-      <p class="hint">엑셀에서 번호·이름 두 칸을 그대로 복사해 붙여 넣어도 돼요. 번호가 없으면 순서대로 매겨요.</p>
+      <div class="btns" style="margin-top:8px"><label class="btn primary" for="fFile">엑셀 명렬표 불러오기</label><input type="file" id="fFile" accept=".xlsx,.xls,.csv" hidden></div>
+      <p class="hint">명렬표 엑셀 파일을 고르거나 이 칸에 끌어다 놓으세요. 엑셀에서 표를 긁어 붙여 넣어도 돼요. 학년·반·번호·성명(이름)·성별 칸을 알아서 찾고, 여러 반이 들어 있으면 반을 고르게 해요.</p>
     </section>
     <section class="sec">
       <h3>책상 배치</h3>
@@ -291,6 +292,7 @@ textarea { min-height: 170px; resize: vertical; line-height: 1.5; font-size: 14p
 </div>
 
 <div class="modal" id="modal"><div class="box"><h3 id="mTitle"></h3><p class="hint" id="mText"></p><textarea id="mArea" spellcheck="false"></textarea><div class="btns" id="mBtns"></div></div></div>
+<div class="modal" id="pickCls"><div class="box"><h3>어느 반을 넣을까요?</h3><p class="hint" id="pickInfo"></p><div class="btns" id="pickBtns"></div><div class="btns"><button class="btn" id="pickCancel">그만두기</button></div></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -679,6 +681,85 @@ function ask(title, text, area, actions) {
 let idleT;
 function wake() { $("#bar").classList.remove("hide"); $("#dock").classList.remove("hide"); clearTimeout(idleT); idleT = setTimeout(() => { if (!$("#drawer").classList.contains("open") && !$("#secret").classList.contains("open")) $("#bar").classList.add("hide"); }, 4000); }
 
+/* ---------------- 명렬 표 읽기 (엑셀 파일·긁어 붙이기) ---------------- */
+const HAN = /^[가-힣]{2,5}$/;
+function tableToRoster(rows) {
+  rows = rows.map(r => r.map(v => (v == null ? "" : String(v)).trim())).filter(r => r.some(Boolean));
+  if (!rows.length) return null;
+  let hi = -1, col = {};
+  for (let i = 0; i < Math.min(6, rows.length); i++) {
+    const r = rows[i], c = {};
+    r.forEach((v, j) => {
+      const t = v.replace(/\s/g, "");
+      if (/^(성명|이름|학생명|학생이름)$/.test(t)) c.name = j;
+      else if (/^(번호|출석번호|반번호)$/.test(t)) c.no = j;
+      else if (/^학번$/.test(t)) c.sid = j;
+      else if (/^(반|학급)$/.test(t)) c.cls = j;
+      else if (/^학년$/.test(t)) c.grade = j;
+      else if (/^(성별|남녀)$/.test(t)) c.g = j;
+    });
+    if (c.name != null) { hi = i; col = c; break; }
+  }
+  const body = rows.slice(hi + 1);
+  const width = Math.max(...body.map(r => r.length));
+  const share = (j, re) => body.filter(r => re.test(r[j] || "")).length / body.length;
+  if (col.name == null) {   // 머리줄이 없으면 내용으로 짐작
+    let best = -1, bs = 0; for (let j = 0; j < width; j++) { const sc = share(j, HAN); if (sc > bs) { bs = sc; best = j; } }
+    if (bs < .5) return null; col.name = best;
+    for (let j = 0; j < width; j++) if (j !== col.name) {
+      if (col.g == null && share(j, /^(남|여)(자)?$/) > .6) col.g = j;
+      else if (col.sid == null && share(j, /^\d{5}$/) > .6) col.sid = j;
+      else if (col.no == null && share(j, /^\d{1,2}$/) > .6) col.no = j;
+    }
+  }
+  if (col.g == null) for (let j = 0; j < width; j++) if (j !== col.name && share(j, /^(남|여)(자)?$/) > .6) col.g = j;
+  const list = [];
+  for (const r of body) {
+    const name = (r[col.name] || "").replace(/\s+/g, " "); if (!name || /^(성명|이름)$/.test(name)) continue;
+    let no = col.no != null ? parseInt(r[col.no], 10) : NaN, gr = col.grade != null ? r[col.grade] : "", cl = col.cls != null ? r[col.cls] : "";
+    if (col.sid != null && /^\d{5}$/.test(r[col.sid] || "")) { const sid = r[col.sid]; if (isNaN(no)) no = +sid.slice(3); if (!gr) gr = sid[0]; if (!cl) cl = String(+sid.slice(1, 3)); }
+    const g = col.g != null ? (/^남/.test(r[col.g]) ? "남" : /^여/.test(r[col.g]) ? "여" : "") : "";
+    list.push({ no: isNaN(no) ? null : no, name, g, key: (gr ? gr + "학년 " : "") + (cl ? cl + "반" : "") });
+  }
+  return list.length ? list : null;
+}
+function applyRoster(list) {
+  const groups = {}; for (const x of list) (groups[x.key] = groups[x.key] || []).push(x);
+  const keys = Object.keys(groups).filter(Boolean);
+  const put = arr => {
+    arr.sort((a, b) => (a.no ?? 999) - (b.no ?? 999));
+    C().roster = arr.map((x, i) => `${x.no ?? i + 1} ${x.name}${x.g ? " " + x.g : ""}`).join("\n");
+    C().current = null; save(); fillSet(); render(); toast(`${arr.length}명을 넣었어요.`);
+    if (arr.length > seatList().filter(x => !x.off).length) { $("#fCount").value = arr.length; $("#btnFit").click(); }
+  };
+  if (keys.length <= 1) { put(list); return; }
+  $("#pickInfo").textContent = `명렬표에 ${keys.length}개 반이 있어요.`;
+  const bx = $("#pickBtns"); bx.innerHTML = "";
+  keys.sort((a, b) => a.localeCompare(b, "ko", { numeric: true })).forEach(k => {
+    const b = el("button", "btn", `${k} (${groups[k].length}명)`);
+    b.onclick = () => { $("#pickCls").classList.remove("open"); if (/학급|새 학급|예시/.test(C().name)) { C().name = k; fillPick(); } put(groups[k]); };
+    bx.appendChild(b);
+  });
+  $("#pickCls").classList.add("open");
+}
+function loadXlsxLib() {
+  if (window.XLSX) return Promise.resolve();
+  return new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc); });
+}
+async function readFile(f) {
+  try {
+    let rows;
+    if (/\.csv$/i.test(f.name)) { const t = await f.text(); rows = t.split(/\r?\n/).map(l => l.split(/,|\t/)); }
+    else {
+      await loadXlsxLib();
+      const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
+      rows = [];
+      for (const n of wb.SheetNames) { const r = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: "" }); const got = tableToRoster(r); if (got) { applyRoster(got); return; } rows = rows.concat(r); }
+    }
+    const got = tableToRoster(rows); if (got) applyRoster(got); else toast("이름 칸을 찾지 못했어요. 성명(이름) 칸이 있는 표인지 봐 주세요.");
+  } catch (e) { toast("파일을 읽지 못했어요. 엑셀(.xlsx)이나 CSV 파일인지 봐 주세요."); }
+}
+
 /* ---------------- 시작 ---------------- */
 function start() {
   fitDust(); tick(); fillPick(); bindSet(); render(); wake();
@@ -686,6 +767,16 @@ function start() {
   $("#btnView").onclick = () => { view = view === "student" ? "teacher" : "student"; $("#btnView").textContent = view === "student" ? "학생 시점" : "교사 시점"; render(); };
   $("#btnFull").onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch (e) { toast("이 화면에서는 전체 화면을 쓸 수 없어요. 브라우저의 F11 을 눌러 보세요."); } };
   $("#btnSet").onclick = () => openSet(true); $("#btnCloseSet").onclick = () => openSet(false);
+  $("#fFile").onchange = e => { const f = e.target.files[0]; if (f) readFile(f); e.target.value = ""; };
+  const ta = $("#fRoster");
+  ta.addEventListener("dragover", e => { e.preventDefault(); });
+  ta.addEventListener("drop", e => { const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) { e.preventDefault(); readFile(f); } });
+  ta.addEventListener("paste", e => {
+    const t = e.clipboardData && e.clipboardData.getData("text/plain"); if (!t || !t.includes("\t")) return;   // 엑셀에서 긁은 표만 알아서 읽음
+    const got = tableToRoster(t.split(/\r?\n/).map(l => l.split("\t"))); if (!got) return;
+    e.preventDefault(); applyRoster(got);
+  });
+  $("#pickCancel").onclick = () => $("#pickCls").classList.remove("open");
   $("#btnDraw").onclick = draw; $("#btnNext").onclick = revealNext; $("#btnKeep").onclick = keep;
   $("#btnCloseSecret").onclick = () => openSecret(false);
   $("#btnClearRules").onclick = () => { C().rules = { fix: {}, tog: [], apart: [], front: {} }; save(); renderSecret(); };

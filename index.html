@@ -242,6 +242,8 @@ textarea { min-height: 170px; resize: vertical; line-height: 1.5; font-size: 14p
         <label class="field">칸(가로)<input type="number" id="fCols" min="1" max="14"></label>
         <label class="field">책상 하나에<select id="fGroup"><option value="1">1명</option><option value="2">2명(짝)</option><option value="3">3명</option></select></label>
       </div>
+      <div class="row2" style="margin-top:10px"><label class="field">학생 수<input type="number" id="fCount" min="1" max="60"></label><label class="field">&nbsp;<button class="btn" id="btnFit">학생 수에 맞추기</button></label></div>
+      <p class="hint">학생 수를 넣고 누르면 줄·칸을 알맞게 바꾸고, 남는 자리는 맨 뒷줄 끝을 빈자리로 둬요. 기본은 30명(5줄 × 6칸)이에요.</p>
       <div class="btns" style="margin-top:10px"><button class="btn" id="btnEditOff">빈자리 고르기</button><span class="hint" id="offHint"></span></div>
       <p class="hint">'빈자리 고르기'를 누른 뒤 교실 그림에서 책상을 누르면 그 자리는 비워 둬요.</p>
     </section>
@@ -302,9 +304,9 @@ const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* ---------------- 상태 ---------------- */
-const SAMPLE = "1 김하늘 여\n2 이도윤 남\n3 박서연 여\n4 최민준 남\n5 정하은 여\n6 강지호 남\n7 조유나 여\n8 윤시우 남\n9 장예린 여\n10 임준서 남\n11 한소율 여\n12 오건우 남\n13 서다인 여\n14 신우진 남\n15 권채원 여\n16 황도현 남\n17 안지아 여\n18 송현우 남\n19 유하린 여\n20 홍재민 남\n21 전수아 여\n22 고은찬 남\n23 문서윤 여\n24 양태오 남";
+const SAMPLE = "1 김하늘 여\n2 이도윤 남\n3 박서연 여\n4 최민준 남\n5 정하은 여\n6 강지호 남\n7 조유나 여\n8 윤시우 남\n9 장예린 여\n10 임준서 남\n11 한소율 여\n12 오건우 남\n13 서다인 여\n14 신우진 남\n15 권채원 여\n16 황도현 남\n17 안지아 여\n18 송현우 남\n19 유하린 여\n20 홍재민 남\n21 전수아 여\n22 고은찬 남\n23 문서윤 여\n24 양태오 남\n25 배나은 여\n26 백시현 남\n27 남궁린 여\n28 노지환 남\n29 하예나 여\n30 곽민재 남";
 function newClass(name, roster) {
-  return { name, roster: roster || "", rows: 4, cols: 6, group: 2, off: [], reveal: "all", mix: false, prev: true,
+  return { name, roster: roster || "", rows: 5, cols: 6, group: 2, off: [], reveal: "all", mix: false, prev: true,
            rules: { fix: {}, tog: [], apart: [], front: {} }, current: null, history: [] };
 }
 let S = load() || { active: "c1", classes: { c1: newClass("예시 학급", SAMPLE) } };
@@ -525,7 +527,7 @@ function openSet(open) { $("#drawer").classList.toggle("open", open); if (open) 
 function fillSet() {
   const c = C();
   $("#fName").value = c.name; $("#fRoster").value = c.roster; $("#fRows").value = c.rows; $("#fCols").value = c.cols; $("#fGroup").value = c.group;
-  $("#fMix").checked = !!c.mix; $("#fPrev").checked = c.prev !== false;
+  $("#fCount").value = students().length || 30; $("#fMix").checked = !!c.mix; $("#fPrev").checked = c.prev !== false;
   document.querySelectorAll("#segReveal button").forEach(b => b.classList.toggle("on", b.dataset.v === c.reveal));
   renderHist();
 }
@@ -544,6 +546,14 @@ function bindSet() {
   $("#fRoster").oninput = e => { c().roster = e.target.value; save(); render(); };
   const num = (id, key, lo, hi) => $(id).onchange = e => { c()[key] = Math.max(lo, Math.min(hi, +e.target.value || lo)); c().off = c().off.filter(k => { const [r, q] = k.split("-").map(Number); return r < c().rows && q < c().cols; }); c().current = null; save(); render(); };
   num("#fRows", "rows", 1, 12); num("#fCols", "cols", 1, 14);
+  $("#btnFit").onclick = () => {
+    const n = Math.max(1, Math.min(60, +$("#fCount").value || 30)); const g = c().group;
+    let cols = n <= 12 ? 4 : n <= 36 ? 6 : 8; cols = Math.max(g, Math.ceil(cols / g) * g);
+    const rows = Math.ceil(n / cols); c().rows = rows; c().cols = cols;
+    const extra = rows * cols - n; const off = [];   // 남는 자리는 맨 뒷줄 끝에서부터 비움
+    for (let i = 0; i < extra; i++) off.push((rows - 1) + "-" + (cols - 1 - i));
+    c().off = off; c().current = null; save(); fillSet(); render(); toast(`${n}명: ${rows}줄 × ${cols}칸으로 맞췄어요.`);
+  };
   $("#fGroup").onchange = e => { c().group = +e.target.value; c().current = null; save(); render(); };
   $("#fMix").onchange = e => { c().mix = e.target.checked; save(); };
   $("#fPrev").onchange = e => { c().prev = e.target.checked; save(); };

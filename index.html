@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>교실 자리 뽑기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+<style>
+/* 위에서 내려다본 교실: 짙은 칠판 판 위에 나무 책상이 짝으로 놓이고, 이름은 분필 먼지와 함께 내려앉는다 (한 가지 세계라 다크 고정) */
+:root {
+  --board: #17201d;        /* 교실 바닥 = 칠판빛 판 */
+  --board-2: #1f2b27;
+  --chalk: #eef2e6;        /* 분필 흰색 */
+  --chalk-dim: #a7b3a4;
+  --wood: #c8925a;         /* 책상 나무 */
+  --wood-deep: #8a5a32;
+  --accent: #f2c94c;       /* 분필 노랑: 강조 하나 */
+  --line: rgba(238, 242, 230, .14);
+  --danger: #ff8a7a;
+  --f-display: "Black Han Sans", "Malgun Gothic", sans-serif;
+  --f-body: "IBM Plex Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  --f-chalk: "Nanum Pen Script", "Malgun Gothic", cursive;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: radial-gradient(1200px 700px at 50% -10%, #263631 0%, var(--board) 55%) fixed, var(--board);
+  color: var(--chalk); font-family: var(--f-body); overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- 위 막대 ---------- */
+.bar {
+  position: fixed; inset: 0 0 auto 0; z-index: 20; display: flex; align-items: center; gap: 12px;
+  padding: 14px 20px; transition: opacity .35s, transform .35s;
+}
+.bar.hide { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; min-width: 0; }
+.brand h1 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 26px; letter-spacing: .02em; }
+.brand .cls { font-family: var(--f-chalk); font-size: 28px; color: var(--accent); white-space: nowrap; }
+.chip-btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px;
+  border: 1px solid var(--line); background: rgba(255,255,255,.04); font-size: 14px; white-space: nowrap;
+}
+.chip-btn:hover { background: rgba(255,255,255,.09); }
+select.chip-btn { appearance: none; padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, var(--chalk-dim) 50%), linear-gradient(135deg, var(--chalk-dim) 50%, transparent 50%); background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
+select.chip-btn option { background: var(--board-2); }
+
+/* ---------- 교실 ---------- */
+.room { position: absolute; inset: 70px 24px 110px; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.room.teacher-view { flex-direction: column-reverse; }
+.front {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(760px, 70%);
+}
+.chalkboard {
+  width: 100%; height: 46px; border-radius: 6px; background: linear-gradient(#2c4a3e, #22392f);
+  border: 6px solid #6b4a2b; box-shadow: inset 0 0 22px rgba(0,0,0,.45);
+  display: grid; place-items: center; font-family: var(--f-chalk); font-size: 30px; color: var(--chalk); user-select: none;
+}
+.podium { width: 120px; height: 22px; border-radius: 4px; background: var(--wood-deep); display: grid; place-items: center; font-size: 12px; color: var(--chalk); opacity: .85; }
+.grid-wrap { flex: 1; width: 100%; display: grid; place-items: center; min-height: 0; }
+.seats { display: grid; gap: var(--gap-y) 0; }
+.row { display: flex; justify-content: center; }
+.desk { display: flex; gap: 6px; padding: 6px; border-radius: 12px; background: rgba(0,0,0,.18); }
+.aisle { width: var(--aisle); flex: none; }
+.seat {
+  position: relative; width: var(--sw); height: var(--sh); border-radius: 9px; perspective: 600px;
+  display: grid; place-items: center; text-align: center; user-select: none;
+}
+.seat .top {
+  position: absolute; inset: 0; border-radius: 9px; display: grid; place-items: center; padding: 4px;
+  background: linear-gradient(180deg, var(--wood) 0%, #b67f4b 100%);
+  box-shadow: 0 2px 0 var(--wood-deep), 0 8px 18px rgba(0,0,0,.35);
+  color: #2b1a0c; transform-style: preserve-3d; transition: transform .45s cubic-bezier(.2,1.4,.4,1), filter .3s;
+}
+.seat .nm { font-weight: 700; font-size: var(--fs); line-height: 1.1; word-break: keep-all; }
+.seat .no { position: absolute; top: 4px; left: 7px; font-size: calc(var(--fs) * .46); font-weight: 500; opacity: .62; font-variant-numeric: tabular-nums; }
+.seat.empty .top { background: rgba(200,146,90,.18); box-shadow: none; color: transparent; }
+.seat.off .top { background: transparent; border: 1.5px dashed var(--line); box-shadow: none; }
+.seat.off .top::after { content: "빈자리"; font-size: 12px; color: var(--chalk-dim); }
+.seat.rolling .top { filter: blur(.6px) saturate(.8); animation: jig .16s infinite alternate; }
+.seat.landed .top { animation: land .6s cubic-bezier(.2,1.4,.4,1); }
+.seat.q .top::before { content: "?"; font-family: var(--f-display); font-size: calc(var(--fs) * 1.3); color: rgba(43,26,12,.55); }
+.seat.spot .top { box-shadow: 0 0 0 3px var(--accent), 0 0 40px rgba(242,201,76,.55); }
+.edit-off .seat { cursor: pointer; }
+.edit-off .seat:hover .top { outline: 2px solid var(--accent); }
+@keyframes jig { from { transform: translateY(-1px) rotate(-.6deg); } to { transform: translateY(1px) rotate(.6deg); } }
+@keyframes land { 0% { transform: rotateX(80deg) scale(.9); } 60% { transform: rotateX(-12deg) scale(1.04); } 100% { transform: none; } }
+#dust { position: fixed; inset: 0; pointer-events: none; z-index: 15; }
+
+/* ---------- 아래: 뽑기 단추 ---------- */
+.dock { position: fixed; left: 0; right: 0; bottom: 26px; display: flex; justify-content: center; gap: 12px; z-index: 20; transition: opacity .35s; }
+.dock.hide { opacity: 0; pointer-events: none; }
+.draw {
+  font-family: var(--f-display); font-size: 26px; letter-spacing: .04em; padding: 16px 44px; border-radius: 999px; border: 0;
+  background: var(--accent); color: #241b05; box-shadow: 0 10px 30px rgba(242,201,76,.25), inset 0 -3px 0 rgba(0,0,0,.18);
+  transition: transform .15s;
+}
+.draw:hover { transform: translateY(-2px); }
+.draw:disabled { opacity: .5; transform: none; }
+.ghost { padding: 14px 22px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.04); font-size: 15px; }
+.count { font-family: var(--f-chalk); font-size: 26px; color: var(--chalk-dim); align-self: center; }
+
+/* ---------- 설정 서랍 ---------- */
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100%); z-index: 40; background: #121a17;
+  border-left: 1px solid var(--line); transform: translateX(100%); transition: transform .3s ease; display: flex; flex-direction: column;
+}
+.drawer.open { transform: none; }
+.drawer header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+.drawer header h2 { margin: 0; font-size: 18px; }
+.drawer .body { overflow-y: auto; padding: 8px 20px 28px; display: flex; flex-direction: column; gap: 18px; }
+.sec h3 { margin: 14px 0 8px; font-size: 13px; letter-spacing: .08em; color: var(--chalk-dim); font-weight: 500; }
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+input[type=text], input[type=number], textarea, .drawer select {
+  width: 100%; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line); background: #0d1311;
+}
+textarea { min-height: 170px; resize: vertical; line-height: 1.5; font-size: 14px; }
+.hint { font-size: 12.5px; color: var(--chalk-dim); line-height: 1.5; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 8px 12px; font-size: 13.5px; }
+.seg button.on { background: var(--accent); color: #241b05; }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.05); font-size: 14px; }
+.btn.primary { background: var(--accent); color: #241b05; border-color: transparent; font-weight: 700; }
+.btn.warn { color: var(--danger); }
+.hist { display: flex; flex-direction: column; gap: 6px; }
+.hist div { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+
+/* ---------- 비밀 판 (교사만) ---------- */
+.secret {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -48%) scale(.98); opacity: 0; pointer-events: none; z-index: 60;
+  width: min(980px, calc(100% - 32px)); max-height: calc(100% - 40px); background: #0f1513; border: 1px solid var(--line);
+  border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.6); transition: opacity .18s, transform .18s; display: flex; flex-direction: column;
+}
+.secret.open { opacity: 1; transform: translate(-50%, -50%); pointer-events: auto; }
+.secret header { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.secret header b { font-size: 15px; margin-right: auto; }
+.secret .cols { display: grid; grid-template-columns: 260px 1fr 260px; gap: 0; min-height: 0; overflow: hidden; }
+.secret .pane { padding: 14px; overflow-y: auto; border-right: 1px solid var(--line); }
+.secret .pane:last-child { border-right: 0; }
+.people { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.04); font-size: 13.5px; }
+.pp.sel { background: var(--accent); color: #241b05; border-color: transparent; }
+.pp .n { opacity: .6; margin-right: 4px; font-variant-numeric: tabular-nums; }
+.mini { display: grid; gap: 6px; justify-content: center; }
+.mini .mrow { display: flex; justify-content: center; gap: 4px; }
+.mini .mdesk { display: flex; gap: 3px; padding: 3px; border-radius: 6px; background: rgba(255,255,255,.04); }
+.mini .ms { width: 58px; height: 34px; border-radius: 6px; border: 1px solid var(--line); background: rgba(200,146,90,.18); font-size: 11.5px; display: grid; place-items: center; line-height: 1.1; padding: 2px; }
+.mini .ms.fixed { background: var(--wood); color: #2b1a0c; font-weight: 700; }
+.mini .ms.offs { opacity: .3; border-style: dashed; background: transparent; }
+.mini .ms.front { box-shadow: inset 0 -3px 0 var(--accent); }
+.mini .maisle { width: 14px; }
+.mini .mboard { text-align: center; font-family: var(--f-chalk); font-size: 20px; color: var(--chalk-dim); }
+.rules { display: flex; flex-direction: column; gap: 6px; }
+.rule { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 10px; font-size: 13.5px; }
+.rule .k { font-size: 11.5px; padding: 2px 7px; border-radius: 999px; background: rgba(255,255,255,.08); white-space: nowrap; }
+.rule .k.t { background: rgba(242,201,76,.2); color: var(--accent); }
+.rule .k.a { background: rgba(255,138,122,.18); color: var(--danger); }
+.rule span.txt { flex: 1; }
+.rule button { border: 0; background: transparent; color: var(--chalk-dim); font-size: 16px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.tabs button { padding: 7px 11px; border-radius: 999px; border: 1px solid var(--line); background: transparent; font-size: 13px; }
+.tabs button.on { background: var(--chalk); color: var(--board); border-color: transparent; }
+.status { font-size: 12.5px; color: var(--chalk-dim); min-height: 18px; }
+.status.bad { color: var(--danger); }
+
+.toast { position: fixed; left: 50%; bottom: 110px; transform: translateX(-50%); z-index: 70; background: #0d1311; border: 1px solid var(--line); padding: 10px 16px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity .25s; pointer-events: none; }
+.toast.show { opacity: 1; }
+.modal { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.55); display: none; place-items: center; padding: 16px; }
+.modal.open { display: grid; }
+.modal .box { width: min(560px, 100%); background: #121a17; border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.modal .box h3 { margin: 0; font-size: 17px; }
+#hot { position: fixed; right: 0; bottom: 0; width: 56px; height: 56px; z-index: 30; }
+
+@media (max-width: 760px) {
+  .secret .cols { grid-template-columns: 1fr; overflow-y: auto; }
+  .secret .pane { border-right: 0; border-bottom: 1px solid var(--line); }
+  .brand h1 { font-size: 20px; }
+  .bar { flex-wrap: wrap; }
+  .room { inset: 110px 16px 110px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .seat .top, .seat.landed .top, .seat.rolling .top { animation: none !important; transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="bar" id="bar">
+  <div class="brand"><h1>자리 뽑기</h1><span class="cls" id="clsName"></span></div>
+  <select class="chip-btn" id="clsPick" aria-label="학급 고르기"></select>
+  <button class="chip-btn" id="btnView" title="교사 시점은 교탁 쪽에서 본 모습이에요">학생 시점</button>
+  <button class="chip-btn" id="btnFull">전체 화면</button>
+  <button class="chip-btn" id="btnSet">설정</button>
+</div>
+
+<main class="room" id="room">
+  <div class="front"><div class="chalkboard" id="board">칠판</div><div class="podium">교탁</div></div>
+  <div class="grid-wrap"><div class="seats" id="seats"></div></div>
+</main>
+<canvas id="dust"></canvas>
+
+<div class="dock" id="dock">
+  <span class="count" id="count"></span>
+  <button class="draw" id="btnDraw">자리 뽑기</button>
+  <button class="ghost" id="btnNext" hidden>다음 자리 공개</button>
+  <button class="ghost" id="btnKeep" hidden>이 자리로 정하기</button>
+</div>
+<div id="hot" aria-hidden="true"></div>
+
+<!-- 설정 서랍 -->
+<aside class="drawer" id="drawer" aria-label="설정">
+  <header><h2>설정</h2><button class="btn" id="btnCloseSet">닫기</button></header>
+  <div class="body">
+    <section class="sec">
+      <h3>학급</h3>
+      <div class="row2">
+        <label class="field">학급 이름<input type="text" id="fName"></label>
+        <label class="field">&nbsp;<span class="btns"><button class="btn" id="btnNewCls">새 학급</button><button class="btn warn" id="btnDelCls">지우기</button></span></label>
+      </div>
+    </section>
+    <section class="sec">
+      <h3>명렬</h3>
+      <label class="field">한 줄에 한 명: 번호 이름 (성별은 남/여, 있으면)
+        <textarea id="fRoster" spellcheck="false" placeholder="1 김하늘 여&#10;2 이도윤 남"></textarea>
+      </label>
+      <p class="hint">엑셀에서 번호·이름 두 칸을 그대로 복사해 붙여 넣어도 돼요. 번호가 없으면 순서대로 매겨요.</p>
+    </section>
+    <section class="sec">
+      <h3>책상 배치</h3>
+      <div class="row3">
+        <label class="field">줄(앞→뒤)<input type="number" id="fRows" min="1" max="12"></label>
+        <label class="field">칸(가로)<input type="number" id="fCols" min="1" max="14"></label>
+        <label class="field">책상 하나에<select id="fGroup"><option value="1">1명</option><option value="2">2명(짝)</option><option value="3">3명</option></select></label>
+      </div>
+      <div class="btns" style="margin-top:10px"><button class="btn" id="btnEditOff">빈자리 고르기</button><span class="hint" id="offHint"></span></div>
+      <p class="hint">'빈자리 고르기'를 누른 뒤 교실 그림에서 책상을 누르면 그 자리는 비워 둬요.</p>
+    </section>
+    <section class="sec">
+      <h3>뽑기 방식</h3>
+      <div class="field">공개 방법
+        <div class="seg" id="segReveal"><button data-v="all">한꺼번에</button><button data-v="one">한 명씩</button></div>
+      </div>
+      <label class="check" style="margin-top:10px"><input type="checkbox" id="fMix"> 짝은 될 수 있으면 남녀 섞기</label>
+      <label class="check"><input type="checkbox" id="fPrev" checked> 지난번 짝과 다시 짝이 되지 않게</label>
+    </section>
+    <section class="sec">
+      <h3>지난 자리 기록</h3>
+      <div class="hist" id="hist"></div>
+    </section>
+    <section class="sec">
+      <h3>표로 복사 · 백업</h3>
+      <div class="btns">
+        <button class="btn" id="btnCopyTable">자리표 복사(엑셀용)</button>
+        <button class="btn" id="btnBackup">백업 글 복사</button>
+        <button class="btn" id="btnRestore">백업 불러오기</button>
+      </div>
+      <p class="hint">명렬과 자리는 이 브라우저에만 저장돼요. 인터넷으로 보내지 않아요. 다른 컴퓨터에서 쓰려면 백업 글을 복사해 두었다가 불러오세요.</p>
+    </section>
+  </div>
+</aside>
+
+<!-- 비밀 판 -->
+<div class="secret" id="secret" role="dialog" aria-label="교사 도구">
+  <header><b>교사 도구</b><span class="hint">Esc 를 누르면 바로 닫혀요</span><button class="btn" id="btnCloseSecret">닫기</button></header>
+  <div class="cols">
+    <div class="pane">
+      <div class="tabs" id="tabs">
+        <button data-m="fix" class="on">자리 지정</button><button data-m="tog">붙이기</button><button data-m="apart">떼기</button><button data-m="front">앞쪽</button>
+      </div>
+      <p class="hint" id="modeHint"></p>
+      <div class="people" id="people"></div>
+    </div>
+    <div class="pane"><div class="mini" id="mini"></div><p class="status" id="solveStatus"></p></div>
+    <div class="pane">
+      <div class="rules" id="rules"></div>
+      <div class="btns" style="margin-top:12px"><button class="btn warn" id="btnClearRules">모두 지우기</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal"><div class="box"><h3 id="mTitle"></h3><p class="hint" id="mText"></p><textarea id="mArea" spellcheck="false"></textarea><div class="btns" id="mBtns"></div></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+"use strict";
+const KEY = "seatdraw.v1";
+const $ = s => document.querySelector(s);
+const el = (t, cls, txt) => { const e = document.createElement(t); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+const rnd = n => Math.floor(Math.random() * n);
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------------- 상태 ---------------- */
+const SAMPLE = "1 김하늘 여\n2 이도윤 남\n3 박서연 여\n4 최민준 남\n5 정하은 여\n6 강지호 남\n7 조유나 여\n8 윤시우 남\n9 장예린 여\n10 임준서 남\n11 한소율 여\n12 오건우 남\n13 서다인 여\n14 신우진 남\n15 권채원 여\n16 황도현 남\n17 안지아 여\n18 송현우 남\n19 유하린 여\n20 홍재민 남\n21 전수아 여\n22 고은찬 남\n23 문서윤 여\n24 양태오 남";
+function newClass(name, roster) {
+  return { name, roster: roster || "", rows: 4, cols: 6, group: 2, off: [], reveal: "all", mix: false, prev: true,
+           rules: { fix: {}, tog: [], apart: [], front: {} }, current: null, history: [] };
+}
+let S = load() || { active: "c1", classes: { c1: newClass("예시 학급", SAMPLE) } };
+function load() { try { const t = localStorage.getItem(KEY); return t ? JSON.parse(t) : null; } catch (e) { return null; } }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 저장이 막힌 브라우저: 이 화면에서만 */ } }
+const C = () => S.classes[S.active];
+
+function parseRoster(text) {
+  const out = []; let auto = 1;
+  for (const raw of String(text || "").split(/\r?\n/)) {
+    const line = raw.replace(/\t/g, " ").trim(); if (!line) continue;
+    const parts = line.split(/\s+/);
+    let no = null, g = "";
+    if (/^\d+$/.test(parts[0])) no = +parts.shift();
+    const last = parts[parts.length - 1];
+    if (parts.length > 1 && /^(남|여|M|F|m|f)$/.test(last)) { g = /^(남|M|m)$/.test(last) ? "m" : "f"; parts.pop(); }
+    const name = parts.join(" "); if (!name) continue;
+    if (no == null) no = auto; auto = no + 1;
+    out.push({ id: "s" + no + "_" + name, no, name, g });
+  }
+  return out;
+}
+const students = () => parseRoster(C().roster);
+const byId = () => Object.fromEntries(students().map(s => [s.id, s]));
+
+/* ---------------- 좌석 모양 ---------------- */
+function seatList(c = C()) {
+  const list = [];
+  for (let r = 0; r < c.rows; r++) for (let k = 0; k < c.cols; k++) {
+    const key = r + "-" + k; const grp = Math.floor(k / c.group);
+    list.push({ key, r, k, desk: r + "-" + grp, x: k + grp * 0.9, off: c.off.includes(key) });
+  }
+  return list;
+}
+const near = (a, b) => Math.abs(a.r - b.r) <= 1 && Math.abs(a.x - b.x) <= 1.05;
+
+/* ---------------- 자리 정하기 (비밀 규칙은 반드시, 짝 섞기·지난 짝은 될 수 있으면) ---------------- */
+function solve(c = C()) {
+  const ss = students(), ids = new Set(ss.map(s => s.id));
+  const seats = seatList(c).filter(s => !s.off); const sk = Object.fromEntries(seats.map(s => [s.key, s]));
+  if (ss.length > seats.length) return { err: `학생이 ${ss.length}명인데 자리가 ${seats.length}개예요. 줄이나 칸을 늘리거나 빈자리를 줄여 주세요.` };
+  const R = c.rules;
+  const fix = Object.entries(R.fix).filter(([id, k]) => ids.has(id) && sk[k]);
+  const tog = R.tog.filter(p => ids.has(p[0]) && ids.has(p[1]));
+  const apart = R.apart.filter(p => ids.has(p[0]) && ids.has(p[1]));
+  const front = Object.fromEntries(Object.entries(R.front).filter(([id]) => ids.has(id)));
+  const togOf = {}, apartOf = {};
+  for (const [a, b] of tog) { (togOf[a] = togOf[a] || []).push(b); (togOf[b] = togOf[b] || []).push(a); }
+  for (const [a, b] of apart) { (apartOf[a] = apartOf[a] || []).push(b); (apartOf[b] = apartOf[b] || []).push(a); }
+  const gender = Object.fromEntries(ss.map(s => [s.id, s.g]));
+  const last = c.history[0] ? c.history[0].map : null;
+  const lastPartner = {};
+  if (last) { const inv = {}; for (const [k, id] of Object.entries(last)) inv[id] = k;
+    const all = seatList(c); const ak = Object.fromEntries(all.map(s => [s.key, s]));
+    for (const [id, k] of Object.entries(inv)) { const s = ak[k]; if (!s) continue; lastPartner[id] = Object.entries(last).filter(([k2, id2]) => id2 !== id && ak[k2] && ak[k2].desk === s.desk).map(([, id2]) => id2); } }
+  const okTog = (s, t) => c.group >= 2 ? s.desk === t.desk : near(s, t);
+  const deg = id => (fix.some(f => f[0] === id) ? 9 : 0) + (togOf[id] || []).length * 3 + (apartOf[id] || []).length * 2 + (front[id] ? 2 : 0);
+
+  function once() {
+    const at = {}, used = new Set();
+    for (const [id, k] of fix) { if (used.has(k)) return null; at[id] = sk[k]; used.add(k); }
+    const order = shuffle(ss.map(s => s.id).filter(id => !at[id])).sort((a, b) => deg(b) - deg(a));
+    const queue = []; const seen = new Set(Object.keys(at));
+    const push = id => { if (seen.has(id)) return; seen.add(id); queue.push(id); (togOf[id] || []).forEach(push); };
+    order.forEach(push);
+    for (const id of queue) {
+      let cand = seats.filter(s => !used.has(s.key));
+      if (front[id]) cand = cand.filter(s => s.r < front[id]);
+      for (const o of apartOf[id] || []) if (at[o]) cand = cand.filter(s => s.desk !== at[o].desk && !near(s, at[o]));
+      for (const o of togOf[id] || []) if (at[o]) cand = cand.filter(s => okTog(s, at[o]));
+      const pending = (togOf[id] || []).filter(o => !at[o]);
+      if (pending.length) cand = cand.filter(s => seats.some(t => !used.has(t.key) && t.key !== s.key && okTog(s, t)));
+      if (!cand.length) return null;
+      const s = cand[rnd(cand.length)]; at[id] = s; used.add(s.key);
+    }
+    return at;
+  }
+  function score(at) {
+    let sc = Math.random() * 0.5; const deskMap = {};
+    for (const [id, s] of Object.entries(at)) (deskMap[s.desk] = deskMap[s.desk] || []).push(id);
+    for (const g of Object.values(deskMap)) {
+      if (g.length < 2) continue;
+      if (c.mix) { const gs = new Set(g.map(id => gender[id]).filter(Boolean)); if (gs.size > 1) sc += 2; }
+      if (c.prev) for (const a of g) for (const b of g) if (a < b && (lastPartner[a] || []).includes(b) && !(togOf[a] || []).includes(b)) sc -= 4;
+    }
+    if (last) for (const [id, s] of Object.entries(at)) if (last[s.key] === id && !fix.some(f => f[0] === id)) sc -= 1;
+    return sc;
+  }
+  let best = null, bestSc = -1e9, ok = 0;
+  const t0 = performance.now();
+  for (let i = 0; i < 4000 && ok < 120 && performance.now() - t0 < 900; i++) {
+    const at = once(); if (!at) continue; ok++;
+    const sc = score(at); if (sc > bestSc) { bestSc = sc; best = at; }
+  }
+  if (!best) return { err: "지정한 규칙을 모두 지키는 자리를 찾지 못했어요. 붙이기·떼기·앞쪽 규칙이 서로 부딪히지 않는지 봐 주세요." };
+  const map = {}; for (const [id, s] of Object.entries(best)) map[s.key] = id;
+  return { map };
+}
+
+/* ---------------- 그리기 ---------------- */
+let view = "student", editingOff = false, drawing = false;
+function sizeVars() {
+  const c = C(); const room = $("#room").getBoundingClientRect();
+  const groups = Math.ceil(c.cols / c.group);
+  const aisle = Math.max(16, Math.min(46, room.width * .025));
+  const availW = room.width - aisle * (groups - 1) - groups * 18 - 40;
+  const sw = Math.max(54, Math.min(170, availW / c.cols - 6));
+  const availH = room.height - 130;
+  const sh = Math.max(40, Math.min(96, availH / c.rows - 22, sw * .62));
+  const fs = Math.max(13, Math.min(34, sh * .36, sw * .2));
+  const root = document.documentElement.style;
+  root.setProperty("--sw", sw + "px"); root.setProperty("--sh", sh + "px"); root.setProperty("--fs", fs + "px");
+  root.setProperty("--aisle", aisle + "px"); root.setProperty("--gap-y", Math.max(10, Math.min(24, sh * .25)) + "px");
+}
+function render() {
+  const c = C(); const by = byId();
+  $("#clsName").textContent = c.name;
+  const box = $("#seats"); box.innerHTML = "";
+  box.classList.toggle("edit-off", editingOff);
+  $("#room").classList.toggle("teacher-view", view === "teacher");
+  const rowsIdx = [...Array(c.rows).keys()]; if (view === "teacher") rowsIdx.reverse();
+  for (const r of rowsIdx) {
+    const row = el("div", "row");
+    let cols = [...Array(c.cols).keys()]; if (view === "teacher") cols.reverse();
+    let curDesk = null, deskEl = null, lastGrp = null;
+    for (const k of cols) {
+      const grp = Math.floor(k / c.group);
+      if (grp !== lastGrp) { if (lastGrp !== null) row.appendChild(el("div", "aisle")); deskEl = el("div", "desk"); row.appendChild(deskEl); lastGrp = grp; }
+      const key = r + "-" + k; const seat = el("div", "seat"); seat.dataset.key = key;
+      const top = el("div", "top"); seat.appendChild(top);
+      if (c.off.includes(key)) seat.classList.add("off");
+      else {
+        const id = c.current && c.current[key]; const s = id && by[id];
+        if (s) { top.appendChild(el("span", "no", s.no)); top.appendChild(el("span", "nm", s.name)); }
+        else seat.classList.add("empty");
+      }
+      deskEl.appendChild(seat);
+    }
+    box.appendChild(row);
+  }
+  const n = students().length, free = seatList().filter(s => !s.off).length;
+  $("#count").textContent = `${n}명 · 자리 ${free}`;
+  $("#offHint").textContent = c.off.length ? `빈자리 ${c.off.length}곳` : "";
+  sizeVars();
+}
+
+/* ---------------- 뽑기 연출 ---------------- */
+const dust = $("#dust"), dctx = dust.getContext("2d"); let parts = [];
+function fitDust() { dust.width = innerWidth * devicePixelRatio; dust.height = innerHeight * devicePixelRatio; }
+function puff(x, y, n = 14) {
+  if (reduced) return;
+  for (let i = 0; i < n; i++) parts.push({ x, y, vx: (Math.random() - .5) * 2.4, vy: (Math.random() - .9) * 2.2, life: 1, r: 1 + Math.random() * 2.4, c: Math.random() < .25 ? "242,201,76" : "238,242,230" });
+}
+function tick() {
+  dctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); dctx.clearRect(0, 0, innerWidth, innerHeight);
+  parts = parts.filter(p => p.life > 0);
+  for (const p of parts) { p.x += p.vx; p.y += p.vy; p.vy += .05; p.life -= .022; dctx.fillStyle = `rgba(${p.c},${p.life * .9})`; dctx.beginPath(); dctx.arc(p.x, p.y, p.r, 0, 7); dctx.fill(); }
+  requestAnimationFrame(tick);
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let pendingMap = null, revealQueue = [];
+function seatEl(key) { return $(`.seat[data-key="${key}"]`); }
+function paint(seat, s) {
+  const top = seat.querySelector(".top"); top.innerHTML = "";
+  seat.classList.remove("empty", "q");
+  if (s) { top.appendChild(el("span", "no", s.no)); top.appendChild(el("span", "nm", s.name)); } else seat.classList.add("empty");
+}
+async function draw() {
+  if (drawing) return;
+  const res = solve();
+  if (res.err) { toast(res.err); return; }
+  drawing = true; $("#btnDraw").disabled = true; $("#btnKeep").hidden = true; $("#btnNext").hidden = true;
+  const c = C(); const by = byId(); const ss = students();
+  c.current = {}; render();
+  const keys = seatList().filter(s => !s.off).map(s => s.key);
+  const els = keys.map(seatEl);
+  if (!reduced) {
+    els.forEach(e => e.classList.add("rolling"));
+    const t0 = performance.now();
+    while (performance.now() - t0 < 1500) { for (const e of els) paint(e, ss[rnd(ss.length)]); await sleep(75); }
+    els.forEach(e => e.classList.remove("rolling"));
+  }
+  if (c.reveal === "one") {
+    els.forEach(e => { paint(e, null); e.classList.remove("empty"); e.classList.add("q"); });
+    pendingMap = res.map; revealQueue = shuffle(keys.slice());
+    $("#btnNext").hidden = false; drawing = false; $("#btnDraw").disabled = false; $("#btnDraw").textContent = "다시 뽑기";
+    return;
+  }
+  const order = shuffle(keys.slice()); const step = Math.max(28, Math.min(110, 2600 / order.length));
+  for (const k of order) {
+    const e = seatEl(k); const s = by[res.map[k]]; paint(e, s);
+    if (s) { e.classList.remove("landed"); void e.offsetWidth; e.classList.add("landed"); const b = e.getBoundingClientRect(); puff(b.left + b.width / 2, b.top + b.height / 2); }
+    if (!reduced) await sleep(step);
+  }
+  c.current = res.map; save();
+  drawing = false; $("#btnDraw").disabled = false; $("#btnDraw").textContent = "다시 뽑기"; $("#btnKeep").hidden = false;
+}
+function revealNext() {
+  const by = byId(); const c = C();
+  document.querySelectorAll(".seat.spot").forEach(e => e.classList.remove("spot"));
+  while (revealQueue.length) {
+    const k = revealQueue.shift(); const e = seatEl(k); const id = pendingMap[k];
+    e.classList.remove("q"); paint(e, by[id]);
+    if (!id) continue;
+    e.classList.add("landed", "spot"); const b = e.getBoundingClientRect(); puff(b.left + b.width / 2, b.top + b.height / 2, 26);
+    break;
+  }
+  if (!revealQueue.length) { c.current = pendingMap; save(); $("#btnNext").hidden = true; $("#btnKeep").hidden = false; setTimeout(() => document.querySelectorAll(".seat.spot").forEach(e => e.classList.remove("spot")), 900); }
+}
+function keep() {
+  const c = C(); if (!c.current) return;
+  c.history.unshift({ at: new Date().toISOString().slice(0, 16).replace("T", " "), map: c.current });
+  c.history = c.history.slice(0, 12); save(); $("#btnKeep").hidden = true; renderHist(); toast("이 자리로 정했어요. 다음 뽑기 때 지난 짝을 피해요.");
+}
+
+/* ---------------- 설정 서랍 ---------------- */
+function openSet(open) { $("#drawer").classList.toggle("open", open); if (open) fillSet(); }
+function fillSet() {
+  const c = C();
+  $("#fName").value = c.name; $("#fRoster").value = c.roster; $("#fRows").value = c.rows; $("#fCols").value = c.cols; $("#fGroup").value = c.group;
+  $("#fMix").checked = !!c.mix; $("#fPrev").checked = c.prev !== false;
+  document.querySelectorAll("#segReveal button").forEach(b => b.classList.toggle("on", b.dataset.v === c.reveal));
+  renderHist();
+}
+function renderHist() {
+  const c = C(); const box = $("#hist"); box.innerHTML = "";
+  if (!c.history.length) { box.appendChild(el("p", "hint", "아직 정한 자리가 없어요. 뽑은 뒤 '이 자리로 정하기'를 누르면 남아요.")); return; }
+  c.history.forEach((h, i) => {
+    const d = el("div"); d.appendChild(el("span", "", h.at));
+    const b = el("button", "btn", "다시 보기"); b.onclick = () => { c.current = h.map; save(); render(); toast("그때 자리를 띄웠어요."); };
+    d.appendChild(b); box.appendChild(d);
+  });
+}
+function bindSet() {
+  const c = () => C();
+  $("#fName").oninput = e => { c().name = e.target.value || "이름 없는 학급"; save(); render(); fillPick(); };
+  $("#fRoster").oninput = e => { c().roster = e.target.value; save(); render(); };
+  const num = (id, key, lo, hi) => $(id).onchange = e => { c()[key] = Math.max(lo, Math.min(hi, +e.target.value || lo)); c().off = c().off.filter(k => { const [r, q] = k.split("-").map(Number); return r < c().rows && q < c().cols; }); c().current = null; save(); render(); };
+  num("#fRows", "rows", 1, 12); num("#fCols", "cols", 1, 14);
+  $("#fGroup").onchange = e => { c().group = +e.target.value; c().current = null; save(); render(); };
+  $("#fMix").onchange = e => { c().mix = e.target.checked; save(); };
+  $("#fPrev").onchange = e => { c().prev = e.target.checked; save(); };
+  document.querySelectorAll("#segReveal button").forEach(b => b.onclick = () => { c().reveal = b.dataset.v; save(); fillSet(); });
+  $("#btnEditOff").onclick = () => { editingOff = !editingOff; $("#btnEditOff").textContent = editingOff ? "빈자리 고르기 끝" : "빈자리 고르기"; if (editingOff) openSet(false); render(); toast(editingOff ? "비울 책상을 누르세요. 다 했으면 설정에서 '빈자리 고르기 끝'." : "빈자리를 저장했어요."); };
+  $("#btnNewCls").onclick = () => { const id = "c" + Date.now(); S.classes[id] = newClass("새 학급"); S.active = id; save(); fillPick(); fillSet(); render(); };
+  $("#btnDelCls").onclick = () => ask("이 학급을 지울까요?", "명렬, 비밀 규칙, 지난 자리 기록이 모두 지워져요.", null, [["지우기", () => {
+    delete S.classes[S.active]; if (!Object.keys(S.classes).length) S.classes.c1 = newClass("새 학급"); S.active = Object.keys(S.classes)[0]; save(); fillPick(); fillSet(); render(); }]]);
+  $("#btnCopyTable").onclick = () => copy(tableText(), "자리표를 복사했어요. 엑셀에 붙여 넣으세요.");
+  $("#btnBackup").onclick = () => copy(JSON.stringify(S), "백업 글을 복사했어요. 메모장 등에 붙여 두세요.");
+  $("#btnRestore").onclick = () => ask("백업 불러오기", "복사해 둔 백업 글을 붙여 넣으세요. 지금 이 브라우저의 학급들은 백업 내용으로 바뀌어요.", "", [["불러오기", v => {
+    try { const o = JSON.parse(v); if (!o || !o.classes) throw 0; S = o; save(); fillPick(); fillSet(); render(); toast("불러왔어요."); } catch (e) { toast("백업 글이 아니에요. 처음부터 끝까지 다 붙여 넣었는지 봐 주세요."); } }]]);
+}
+function tableText() {
+  const c = C(); const by = byId(); const lines = [];
+  const rows = [...Array(c.rows).keys()]; const cols = [...Array(c.cols).keys()];
+  if (view === "teacher") { rows.reverse(); cols.reverse(); }
+  if (view !== "teacher") lines.push("칠판·교탁");
+  for (const r of rows) lines.push(cols.map(k => { const key = r + "-" + k; if (c.off.includes(key)) return ""; const s = c.current && by[c.current[key]]; return s ? `${s.no} ${s.name}` : ""; }).join("\t"));
+  if (view === "teacher") lines.push("칠판·교탁");
+  return lines.join("\n");
+}
+function fillPick() {
+  const p = $("#clsPick"); p.innerHTML = "";
+  for (const [id, c] of Object.entries(S.classes)) { const o = el("option", "", c.name); o.value = id; p.appendChild(o); }
+  p.value = S.active;
+}
+
+/* ---------------- 비밀 판 ---------------- */
+let mode = "fix", picked = [];
+const HINT = { fix: "학생을 고른 뒤 가운데 교실 그림에서 자리를 누르세요. 같은 자리를 다시 누르면 풀려요.",
+  tog: "두 학생을 차례로 고르면 짝(같은 책상)으로 붙어요. 1인 책상이면 바로 옆자리예요.",
+  apart: "두 학생을 차례로 고르면 짝도, 앞뒤·옆자리도 안 되게 떨어뜨려요.",
+  front: "학생을 고르면 앞쪽 2줄 안에 앉아요. 다시 누르면 3줄, 한 번 더 누르면 풀려요." };
+function openSecret(open) {
+  $("#secret").classList.toggle("open", open);
+  if (open) { picked = []; renderSecret(); } else { $("#solveStatus").textContent = ""; }
+}
+function renderSecret() {
+  const c = C(); const ss = students(); const by = byId(); const R = c.rules;
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.m === mode));
+  $("#modeHint").textContent = HINT[mode];
+  const pb = $("#people"); pb.innerHTML = "";
+  for (const s of ss) {
+    const b = el("button", "pp" + (picked.includes(s.id) ? " sel" : "")); b.appendChild(el("span", "n", s.no)); b.appendChild(document.createTextNode(s.name));
+    if (mode === "front" && R.front[s.id]) b.appendChild(document.createTextNode(` · 앞 ${R.front[s.id]}줄`));
+    if (mode === "fix" && R.fix[s.id]) b.appendChild(document.createTextNode(" · 지정"));
+    b.onclick = () => pickPerson(s.id); pb.appendChild(b);
+  }
+  // 미니 교실 (학생 시점: 칠판이 위)
+  const mini = $("#mini"); mini.innerHTML = ""; mini.appendChild(el("div", "mboard", "칠판"));
+  const fixAt = {}; for (const [id, k] of Object.entries(R.fix)) fixAt[k] = id;
+  const frontRows = Math.max(0, ...Object.values(R.front));
+  for (let r = 0; r < c.rows; r++) {
+    const row = el("div", "mrow"); let lastGrp = null, desk = null;
+    for (let k = 0; k < c.cols; k++) {
+      const grp = Math.floor(k / c.group);
+      if (grp !== lastGrp) { if (lastGrp !== null) row.appendChild(el("div", "maisle")); desk = el("div", "mdesk"); row.appendChild(desk); lastGrp = grp; }
+      const key = r + "-" + k; const b = el("button", "ms");
+      if (c.off.includes(key)) b.classList.add("offs");
+      if (fixAt[key] && by[fixAt[key]]) { b.classList.add("fixed"); b.textContent = by[fixAt[key]].name; }
+      if (r < frontRows) b.classList.add("front");
+      b.onclick = () => pickSeat(key); desk.appendChild(b);
+    }
+    mini.appendChild(row);
+  }
+  // 규칙 목록
+  const rl = $("#rules"); rl.innerHTML = "";
+  const nm = id => by[id] ? by[id].name : "(명렬에 없음)";
+  const add = (k, cls, txt, del) => { const d = el("div", "rule"); d.appendChild(el("span", "k " + cls, k)); d.appendChild(el("span", "txt", txt)); const x = el("button", "", "×"); x.setAttribute("aria-label", "규칙 지우기"); x.onclick = () => { del(); save(); renderSecret(); }; d.appendChild(x); rl.appendChild(d); };
+  for (const [id, k] of Object.entries(R.fix)) { const [r, q] = k.split("-").map(Number); add("지정", "", `${nm(id)} → ${r + 1}줄 ${q + 1}칸`, () => delete R.fix[id]); }
+  R.tog.forEach((p, i) => add("붙이기", "t", `${nm(p[0])} · ${nm(p[1])}`, () => R.tog.splice(i, 1)));
+  R.apart.forEach((p, i) => add("떼기", "a", `${nm(p[0])} ↔ ${nm(p[1])}`, () => R.apart.splice(i, 1)));
+  for (const [id, n] of Object.entries(R.front)) add("앞쪽", "", `${nm(id)} · 앞 ${n}줄 안`, () => delete R.front[id]);
+  if (!rl.children.length) rl.appendChild(el("p", "hint", "아직 규칙이 없어요. 규칙은 학생 화면 어디에도 나타나지 않아요."));
+  checkSolvable();
+}
+function checkSolvable() {
+  const st = $("#solveStatus"); const res = solve();
+  st.textContent = res.err ? res.err : "지금 규칙으로 자리를 만들 수 있어요."; st.classList.toggle("bad", !!res.err);
+}
+function pickPerson(id) {
+  const R = C().rules;
+  if (mode === "front") { const n = R.front[id]; if (!n) R.front[id] = 2; else if (n === 2) R.front[id] = 3; else delete R.front[id]; save(); renderSecret(); return; }
+  if (mode === "fix") { picked = picked[0] === id ? [] : [id]; renderSecret(); return; }
+  if (picked.includes(id)) picked = picked.filter(x => x !== id); else picked.push(id);
+  if (picked.length === 2) {
+    const [a, b] = picked; const list = mode === "tog" ? R.tog : R.apart; const other = mode === "tog" ? R.apart : R.tog;
+    const same = p => (p[0] === a && p[1] === b) || (p[0] === b && p[1] === a);
+    for (let i = other.length - 1; i >= 0; i--) if (same(other[i])) other.splice(i, 1);
+    if (!list.some(same)) list.push([a, b]);
+    picked = []; save();
+  }
+  renderSecret();
+}
+function pickSeat(key) {
+  const c = C(); const R = c.rules;
+  if (mode !== "fix") { mode = "fix"; }
+  const holder = Object.keys(R.fix).find(id => R.fix[id] === key);
+  if (!picked.length) { if (holder) { delete R.fix[holder]; save(); } renderSecret(); return; }
+  if (c.off.includes(key)) { $("#solveStatus").textContent = "빈자리로 정한 책상이에요. 다른 자리를 고르세요."; return; }
+  const id = picked[0]; if (holder && holder !== id) delete R.fix[holder];
+  if (R.fix[id] === key) delete R.fix[id]; else R.fix[id] = key;
+  picked = []; save(); renderSecret();
+}
+
+/* ---------------- 작은 도구 ---------------- */
+let toastT; function toast(t) { const e = $("#toast"); e.textContent = t; e.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove("show"), 2600); }
+async function copy(text, ok) {
+  try { await navigator.clipboard.writeText(text); toast(ok); }
+  catch (e) { ask("복사가 막혀 있어요", "아래 글을 모두 골라 복사해 주세요 (Ctrl+A, Ctrl+C).", text, []); }
+}
+function ask(title, text, area, actions) {
+  $("#mTitle").textContent = title; $("#mText").textContent = text;
+  const a = $("#mArea"); a.hidden = area == null; a.value = area || "";
+  const bx = $("#mBtns"); bx.innerHTML = "";
+  for (const [label, fn] of actions) { const b = el("button", "btn primary", label); b.onclick = () => { $("#modal").classList.remove("open"); fn(a.value); }; bx.appendChild(b); }
+  const cancel = el("button", "btn", actions.length ? "그만두기" : "닫기"); cancel.onclick = () => $("#modal").classList.remove("open"); bx.appendChild(cancel);
+  $("#modal").classList.add("open"); if (area != null) setTimeout(() => { a.focus(); a.select(); }, 30);
+}
+
+/* ---------------- 화면 숨김(수업 중 깔끔하게) ---------------- */
+let idleT;
+function wake() { $("#bar").classList.remove("hide"); $("#dock").classList.remove("hide"); clearTimeout(idleT); idleT = setTimeout(() => { if (!$("#drawer").classList.contains("open") && !$("#secret").classList.contains("open")) $("#bar").classList.add("hide"); }, 4000); }
+
+/* ---------------- 시작 ---------------- */
+function start() {
+  fitDust(); tick(); fillPick(); bindSet(); render(); wake();
+  $("#clsPick").onchange = e => { S.active = e.target.value; editingOff = false; save(); fillSet(); render(); };
+  $("#btnView").onclick = () => { view = view === "student" ? "teacher" : "student"; $("#btnView").textContent = view === "student" ? "학생 시점" : "교사 시점"; render(); };
+  $("#btnFull").onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch (e) { toast("이 화면에서는 전체 화면을 쓸 수 없어요. 브라우저의 F11 을 눌러 보세요."); } };
+  $("#btnSet").onclick = () => openSet(true); $("#btnCloseSet").onclick = () => openSet(false);
+  $("#btnDraw").onclick = draw; $("#btnNext").onclick = revealNext; $("#btnKeep").onclick = keep;
+  $("#btnCloseSecret").onclick = () => openSecret(false);
+  $("#btnClearRules").onclick = () => { C().rules = { fix: {}, tog: [], apart: [], front: {} }; save(); renderSecret(); };
+  document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { mode = b.dataset.m; picked = []; renderSecret(); });
+  $("#seats").addEventListener("click", e => {
+    if (!editingOff) return; const s = e.target.closest(".seat"); if (!s) return;
+    const c = C(); const k = s.dataset.key; c.off = c.off.includes(k) ? c.off.filter(x => x !== k) : [...c.off, k];
+    if (c.current) delete c.current[k]; save(); render();
+  });
+  // 교사 도구 열기: Ctrl+Shift+Y, 또는 오른쪽 아래 모서리를 1.5초 안에 세 번 누르기 (화면에는 표시 없음)
+  addEventListener("keydown", e => {
+    if (e.key === "Escape") { openSecret(false); openSet(false); $("#modal").classList.remove("open"); return; }
+    if (e.ctrlKey && e.shiftKey && (e.key === "Y" || e.key === "y" || e.code === "KeyY")) { e.preventDefault(); openSecret(!$("#secret").classList.contains("open")); return; }
+    if ((e.key === " " || e.key === "Enter") && !$("#btnNext").hidden && !e.target.closest("input,textarea,select,button")) { e.preventDefault(); revealNext(); }
+  });
+  let taps = [];
+  $("#hot").addEventListener("pointerdown", () => { const now = Date.now(); taps = taps.filter(t => now - t < 1500); taps.push(now); if (taps.length >= 3) { taps = []; openSecret(true); } });
+  addEventListener("pointermove", wake); addEventListener("keydown", wake);
+  addEventListener("resize", () => { fitDust(); sizeVars(); });
+  window.claude?.hot?.snapshot?.(() => S);
+}
+if (window.claude?.hot?.ready) window.claude.hot.ready(d => { if (d && d.classes) S = d; start(); }); else start();
+})();
+</script>
+</body>
+</html>

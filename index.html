@@ -66,9 +66,17 @@ select.chip-btn { appearance: none; padding-right: 30px; background-image: linea
 .seat.spot .top { background: var(--accent); color: #fff; border-color: var(--accent); }
 .seat.spot .no { color: rgba(255,255,255,.7); }
 .edit-off .seat { cursor: pointer; }
+.seat[draggable="true"] { cursor: grab; }
+.seat.dragging { opacity: .4; }
+.seat.over .top { border-color: var(--accent); background: var(--accent-soft); }
 .edit-off .seat:hover .top { border-color: var(--accent); }
 @keyframes land { 0% { background: var(--accent-soft); border-color: var(--accent); transform: scale(.96); } 100% { background: var(--surface); transform: none; } }
 #dust { display: none; }
+#big { position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%) scale(.9); z-index: 50; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 34px 64px; border-radius: 24px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 24px 60px rgba(25,31,40,.18); opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; }
+#big.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+#big .bno { font-size: 20px; font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+#big .bnm { font-size: clamp(48px, 9vw, 110px); font-weight: 800; letter-spacing: -.03em; line-height: 1.05; }
+#big .bleft { font-size: 14px; color: var(--ink-2); }
 
 /* 아래: 뽑기 단추 */
 .dock { position: fixed; left: 0; right: 0; bottom: 28px; display: flex; justify-content: center; align-items: center; gap: 10px; z-index: 20; transition: opacity .3s; }
@@ -159,7 +167,23 @@ textarea { min-height: 150px; resize: vertical; line-height: 1.55; }
 .guide h4 { margin: 14px 0 6px; font-size: 14px; color: var(--ink); }
 .guide kbd { padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); background: #f8f9fa; font-size: 12.5px; font-family: inherit; }
 
-body.class-mode #btnSet, body.class-mode #clsPick, body.class-mode #btnView, body.class-mode #btnGuide, body.class-mode #btnSecretTop { display: none; }
+body.class-mode #btnSet, body.class-mode #clsPick, body.class-mode #btnView, body.class-mode #btnGuide, body.class-mode #btnSecretTop, body.class-mode #btnPrint { display: none; }
+#printHead { display: none; }
+@page { size: A4 landscape; margin: 10mm; }
+@media print {
+  body { background: #fff; overflow: visible; }
+  .bar, .dock, .drawer, .secret, .modal, .toast, #dust { display: none !important; }
+  #printHead { display: flex; justify-content: space-between; align-items: baseline; position: static; margin: 0 0 6mm; font-size: 16pt; font-weight: 700; color: #000; }
+  #printHead small { font-size: 10pt; font-weight: 500; }
+  .room { position: static; inset: auto; gap: 6mm; }
+  .grid-wrap { display: block; }
+  .chalkboard { background: #fff; color: #000; border: 1.5pt solid #000; }
+  .podium { border: 1pt solid #000; color: #000; }
+  .desk { background: #fff; border: 1pt solid #888; }
+  .seat .top { border: 1pt solid #000; box-shadow: none; color: #000; background: #fff !important; }
+  .seat.off .top { border: 1pt dashed #999; }
+  .seat .no { color: #444; }
+}
 body.class-mode .prep-only { display: none !important; }
 
 @media (max-width: 760px) {
@@ -178,10 +202,12 @@ body.class-mode .prep-only { display: none !important; }
   <button class="chip-btn" id="btnGuide">사용법</button>
   <select class="chip-btn" id="clsPick" aria-label="학급 고르기"></select>
   <button class="chip-btn" id="btnView" title="교사 시점은 교탁 쪽에서 본 모습이에요">학생 시점</button>
+  <button class="chip-btn" id="btnPrint">인쇄</button>
   <button class="chip-btn" id="btnFull">전체 화면</button>
   <button class="chip-btn" id="btnSet">설정</button>
 </div>
 
+<div id="printHead"><span id="phTitle"></span><small id="phDate"></small></div>
 <main class="room" id="room">
   <div class="front"><div class="chalkboard" id="board">칠판</div><div class="podium">교탁</div></div>
   <div class="grid-wrap"><div class="seats" id="seats"></div></div>
@@ -222,6 +248,11 @@ body.class-mode .prep-only { display: none !important; }
       <p class="hint">명렬표 엑셀 파일을 고르거나 이 칸에 끌어다 놓으세요. 엑셀에서 표를 긁어 붙여 넣어도 돼요. 학년·반·번호·성명(이름)·성별 칸을 알아서 찾고, 여러 반이 들어 있으면 반을 고르게 해요.</p>
     </section>
     <section class="sec">
+      <h3>오늘 빠진 학생</h3>
+      <div class="people" id="absentBox"></div>
+      <p class="hint">누른 학생은 이번 뽑기에서 빠지고 그 자리는 비워 둬요. 다시 누르면 돌아와요.</p>
+    </section>
+    <section class="sec">
       <h3>책상 배치</h3>
       <div class="row3">
         <label class="field">줄(앞→뒤)<input type="number" id="fRows" min="1" max="12"></label>
@@ -239,7 +270,7 @@ body.class-mode .prep-only { display: none !important; }
       <div class="row2" style="margin-top:10px"><label class="field">학생 수<input type="number" id="fCount" min="1" max="60"></label><label class="field">&nbsp;<button class="btn" id="btnFit">학생 수에 맞추기</button></label></div>
       <p class="hint">학생 수를 넣고 누르면 줄·칸을 알맞게 바꾸고, 남는 자리는 맨 뒷줄 끝을 빈자리로 둬요. 기본은 30명(5줄 × 6칸)이에요.</p>
       <div class="btns" style="margin-top:10px"><button class="btn" id="btnEditOff">빈자리 고르기</button><span class="hint" id="offHint"></span></div>
-      <p class="hint">'빈자리 고르기'를 누른 뒤 교실 그림에서 책상을 누르면 그 자리는 비워 둬요.</p>
+      <p class="hint">'빈자리 고르기'를 누른 뒤 교실 그림에서 책상을 누르면 그 자리는 비워 둬요. 뽑은 뒤에는 준비 화면에서 이름 카드를 끌어다 놓아 자리를 서로 바꿀 수 있어요.</p>
     </section>
     <section class="sec">
       <h3>뽑기 방식</h3>
@@ -314,6 +345,7 @@ body.class-mode .prep-only { display: none !important; }
   </ol>
   <div class="btns"><button class="btn primary" id="btnGuideClose">알겠어요</button></div>
 </div></div>
+<div id="big" aria-live="polite"><span class="bno"></span><span class="bnm"></span><span class="bleft"></span></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -357,6 +389,7 @@ function parseRoster(text) {
   return out;
 }
 const students = () => parseRoster(C().roster);
+const present = () => { const ab = new Set(C().absent || []); return students().filter(x => !ab.has(x.id)); };   // 오늘 뽑을 학생
 const byId = () => Object.fromEntries(students().map(s => [s.id, s]));
 
 /* ---------------- 좌석 모양 ---------------- */
@@ -372,7 +405,7 @@ const near = (a, b) => Math.abs((a.y ?? a.r) - (b.y ?? b.r)) <= 1.05 && Math.abs
 
 /* ---------------- 자리 정하기 (비밀 규칙은 반드시, 짝 섞기·지난 짝은 될 수 있으면) ---------------- */
 function solve(c = C()) {
-  const ss = students(), ids = new Set(ss.map(s => s.id));
+  const ss = present(), ids = new Set(ss.map(s => s.id));
   const seats = seatList(c).filter(s => !s.off); const sk = Object.fromEntries(seats.map(s => [s.key, s]));
   if (ss.length > seats.length) return { err: `학생이 ${ss.length}명인데 자리가 ${seats.length}개예요. 줄이나 칸을 늘리거나 빈자리를 줄여 주세요.` };
   const R = c.rules;
@@ -477,12 +510,13 @@ function render() {
         if (s) { top.appendChild(el("span", "no", s.no)); top.appendChild(el("span", "nm", s.name)); }
         else seat.classList.add("empty");
       }
+      if (!classMode && !editingOff && c.current && c.current[key]) seat.draggable = true;
       deskEl.appendChild(seat);
     }
     box.appendChild(row);
   }
-  const n = students().length, free = seatList().filter(s => !s.off).length;
-  $("#count").textContent = `${n}명 · 자리 ${free}`;
+  const n = present().length, free = seatList().filter(s => !s.off).length, ab = (c.absent || []).length;
+  $("#count").textContent = `${n}명 · 자리 ${free}` + (ab && !classMode ? ` · 오늘 빠짐 ${ab}` : "");
   $("#offHint").textContent = c.off.length ? `빈자리 ${c.off.length}곳` : "";
   sizeVars();
 }
@@ -513,7 +547,7 @@ async function draw() {
   const res = solve();
   if (res.err) { toast(res.err); return; }
   drawing = true; $("#btnDraw").disabled = true; $("#btnKeep").hidden = true; $("#btnNext").hidden = true;
-  const c = C(); const by = byId(); const ss = students();
+  const c = C(); const by = byId(); const ss = present();
   c.current = {}; render();
   const keys = seatList().filter(s => !s.off).map(s => s.key);
   const els = keys.map(seatEl);
@@ -540,17 +574,23 @@ async function draw() {
   drawing = false; $("#btnDraw").disabled = false; $("#btnDraw").textContent = "다시 뽑기"; $("#btnKeep").hidden = false;
   if (classMode && !c.redraw) $("#btnDraw").hidden = true;
 }
+let revealing = false;
 function revealNext() {
+  if (revealing) return;
   const by = byId(); const c = C();
   document.querySelectorAll(".seat.spot").forEach(e => e.classList.remove("spot"));
   while (revealQueue.length) {
     const k = revealQueue.shift(); const e = seatEl(k); const id = pendingMap[k];
-    e.classList.remove("q"); paint(e, by[id]);
-    if (!id) continue;
-    e.classList.add("landed", "spot"); const b = e.getBoundingClientRect(); puff(b.left + b.width / 2, b.top + b.height / 2, 26);
+    if (!id) { e.classList.remove("q"); paint(e, null); continue; }
+    const st = by[id]; const big = $("#big");
+    big.querySelector(".bno").textContent = st.no + "번"; big.querySelector(".bnm").textContent = st.name;
+    big.querySelector(".bleft").textContent = revealQueue.filter(k => pendingMap[k]).length ? `남은 학생 ${revealQueue.filter(k => pendingMap[k]).length}명` : "마지막 학생";
+    e.classList.remove("q"); paint(e, null); e.classList.remove("empty"); e.classList.add("q");
+    big.classList.add("show"); revealing = true;
+    setTimeout(() => { big.classList.remove("show"); paint(e, st); e.classList.remove("q"); e.classList.add("landed", "spot"); revealing = false; }, reduced ? 300 : 1300);
     break;
   }
-  if (!revealQueue.length) { c.current = pendingMap; save(); $("#btnNext").hidden = true; $("#btnKeep").hidden = false; setTimeout(() => document.querySelectorAll(".seat.spot").forEach(e => e.classList.remove("spot")), 900); }
+  if (!revealQueue.length) { c.current = pendingMap; save(); $("#btnNext").hidden = true; $("#btnKeep").hidden = false; setTimeout(() => document.querySelectorAll(".seat.spot").forEach(e => e.classList.remove("spot")), 2400); }
 }
 function keep() {
   const c = C(); if (!c.current) return;
@@ -566,7 +606,16 @@ function fillSet() {
   $("#fName").value = c.name; $("#fRoster").value = c.roster; $("#fRows").value = c.rows; $("#fCols").value = c.cols; $("#fGroup").value = c.group;
   $("#fCount").value = students().length || 30; $("#fRedraw").checked = !!c.redraw; $("#fMix").checked = !!c.mix; document.querySelectorAll("#layouts .lay").forEach(b => b.classList.toggle("on", +b.dataset.g === c.group && +b.dataset.v === (c.vgroup || 1))); $("#fPrev").checked = c.prev !== false;
   document.querySelectorAll("#segReveal button").forEach(b => b.classList.toggle("on", b.dataset.v === c.reveal));
-  renderHist();
+  renderHist(); renderAbsent();
+}
+function renderAbsent() {
+  const c = C(); const box = $("#absentBox"); box.innerHTML = ""; const ab = new Set(c.absent || []);
+  for (const st of students()) {
+    const b = el("button", "pp" + (ab.has(st.id) ? " sel" : "")); b.appendChild(el("span", "n", st.no)); b.appendChild(document.createTextNode(st.name));
+    b.onclick = () => { const set = new Set(c.absent || []); set.has(st.id) ? set.delete(st.id) : set.add(st.id); c.absent = [...set]; save(); renderAbsent(); render(); };
+    box.appendChild(b);
+  }
+  if (!box.children.length) box.appendChild(el("p", "hint", "명렬을 먼저 넣어 주세요."));
 }
 function renderHist() {
   const c = C(); const box = $("#hist"); box.innerHTML = "";
@@ -835,6 +884,15 @@ function start() {
   $("#btnFull").onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch (e) { toast("이 화면에서는 전체 화면을 쓸 수 없어요. 브라우저의 F11 을 눌러 보세요."); } };
   $("#btnSet").onclick = () => openSet(true); $("#btnCloseSet").onclick = () => openSet(false);
   $("#btnSecret").onclick = () => { openSet(false); openSecret(true); };
+  $("#btnPrint").onclick = () => {
+    if (!C().current || !Object.keys(C().current).length) { toast("먼저 자리를 뽑거나 지난 자리를 띄워 주세요."); return; }
+    $("#phTitle").textContent = `${C().name} 자리표` + (view === "teacher" ? " (교사 시점)" : "");
+    const d = new Date(); $("#phDate").textContent = `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
+    const old = { sw: getComputedStyle(document.documentElement).getPropertyValue("--sw") };
+    document.documentElement.style.setProperty("--sw", Math.min(150, 250 * 3.78 / C().cols - 14) + "px");
+    try { window.print(); } catch (e) { toast("이 화면에서는 인쇄를 쓸 수 없어요."); }
+    document.documentElement.style.setProperty("--sw", old.sw); sizeVars();
+  };
   $("#btnSecretTop").onclick = () => { openSet(false); openSecret(true); };
   $("#btnGuide").onclick = () => $("#guide").classList.add("open");
   $("#btnGuideClose").onclick = () => $("#guide").classList.remove("open");
@@ -855,6 +913,16 @@ function start() {
   $("#btnCloseSecret").onclick = () => openSecret(false);
   $("#btnClearRules").onclick = () => { C().rules = { fix: {}, tog: [], apart: [], front: {} }; save(); renderSecret(); };
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { mode = b.dataset.m; picked = []; renderSecret(); });
+  let dragFrom = null;   // 준비 화면: 이름 카드를 끌어다 다른 자리에 놓으면 서로 바뀜
+  $("#seats").addEventListener("dragstart", e => { const s = e.target.closest(".seat"); if (!s || classMode) return; dragFrom = s.dataset.key; e.dataTransfer.effectAllowed = "move"; s.classList.add("dragging"); });
+  $("#seats").addEventListener("dragend", () => { document.querySelectorAll(".seat.dragging, .seat.over").forEach(x => x.classList.remove("dragging", "over")); });
+  $("#seats").addEventListener("dragover", e => { const s = e.target.closest(".seat"); if (!s || !dragFrom || s.classList.contains("off")) return; e.preventDefault(); document.querySelectorAll(".seat.over").forEach(x => x.classList.remove("over")); s.classList.add("over"); });
+  $("#seats").addEventListener("drop", e => {
+    const s = e.target.closest(".seat"); if (!s || !dragFrom || s.classList.contains("off")) return; e.preventDefault();
+    const c = C(); const to = s.dataset.key; if (to === dragFrom) return;
+    const a = c.current[dragFrom], b = c.current[to]; c.current[to] = a; if (b) c.current[dragFrom] = b; else delete c.current[dragFrom];
+    dragFrom = null; save(); render(); $("#btnKeep").hidden = false; toast("자리를 바꿨어요.");
+  });
   $("#seats").addEventListener("click", e => {
     if (!editingOff) return; const s = e.target.closest(".seat"); if (!s) return;
     const c = C(); const k = s.dataset.key; c.off = c.off.includes(k) ? c.off.filter(x => x !== k) : [...c.off, k];

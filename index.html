@@ -1461,7 +1461,9 @@ function start() {
 if (window.claude?.hot?.ready) window.claude.hot.ready(d => { const o = d && d.classes ? normalize(d) : null; if (o) S = o; start(); }); else start();
 })();
 </script>
-<!-- 개선 메모장 (교사 요청 2026-11-10): 사이트 안에서 바라는 점을 남기면 저장소 이슈(꼬리표 '개선메모')로 올라가고, Claude 가 20분마다 읽어 반영한 뒤 답을 단다.
+<!-- 개선 메모장 (교사 요청 2026-11-10): 여러 선생님이 로그인 없이 바라는 점을 남기면 선생님의 구글 설문지로 바로 들어가고
+     (화면은 그대로, 뒤에서 formResponse 로 보냄), Claude 가 20분마다 응답 시트(웹에 게시한 CSV)를 읽어 반영한다.
+     상태·답은 같은 저장소의 memo_status.json(사이트와 같은 곳)에 Claude 가 올린다.
      index.html 의 body 끝 바로 앞에 이 파일 내용을 그대로 넣는다(build: py -3.12 inject_memo.py). 수업 화면(class-mode)에서는 단추가 숨는다. -->
 <style id="memoCss">
 #memoBtn { position: fixed; z-index: 60; right: calc(14px + env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
@@ -1488,7 +1490,7 @@ body.class-mode #memoBtn, body.printing #memoBtn { display: none; }
 #memoList .tx { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.55; }
 #memoList .rp { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.55; background: var(--accent-soft, #e8eefb); border-radius: 10px; padding: 8px 12px; }
 #memoList .rp b { display: block; font-size: 12px; color: var(--accent, #2b59c3); margin-bottom: 2px; }
-#memoList .empty { color: var(--ink-2, #6b7684); text-align: center; margin-top: 30px; font-size: 14px; line-height: 1.6; }
+#memoList .empty { color: var(--ink-2, #6b7684); text-align: center; margin-top: 30px; font-size: 14px; line-height: 1.6; white-space: pre-line; }
 #memoForm { padding: 12px 16px 14px; border-top: 1px solid var(--line, #e5e8eb); background: var(--surface, #fff); display: flex; flex-direction: column; gap: 8px; }
 #memoText { font: inherit; font-size: 15px; color: var(--ink, #191f28); background: var(--bg, #f2f3f5); border: 1px solid var(--line, #e5e8eb); border-radius: 10px; padding: 10px 12px; resize: vertical; min-height: 84px; }
 #memoForm .row { display: flex; gap: 8px; align-items: center; }
@@ -1497,82 +1499,96 @@ body.class-mode #memoBtn, body.printing #memoBtn { display: none; }
 #memoSend:disabled { opacity: .45; cursor: default; }
 #memoPane button:focus-visible, #memoText:focus-visible, #memoBtn:focus-visible { outline: 2px solid var(--accent, #2b59c3); outline-offset: 2px; }
 </style>
-<button id="memoBtn" type="button" title="자리 사이트에 바라는 점 남기기">개선 메모</button>
+<button id="memoBtn" type="button" title="자리 뽑기에 바라는 점 남기기">개선 메모</button>
 <div id="memoPane" role="dialog" aria-modal="true" aria-label="개선 메모">
   <div class="mp">
     <header><b>개선 메모</b><button class="mx" id="memoReload" type="button">새로 보기</button><button class="mx" id="memoClose" type="button">닫기</button></header>
-    <p class="note">바라는 점을 적어 주세요. Claude 가 20분마다 읽고 고친 뒤 여기에 답을 달아요. 메모는 공개 게시판(GitHub)에 올라가니 <b>학생 이름은 적지 마세요.</b></p>
+    <p class="note">불편한 점이나 바라는 기능을 적어 주세요. 20분쯤 안에 읽고 고친 뒤 여기에 답을 달아요. 메모는 쓰시는 모든 선생님이 함께 보니 <b>학생 이름은 적지 마세요.</b></p>
     <div id="memoList" aria-live="polite"><p class="empty">메모를 불러오는 중이에요…</p></div>
     <form id="memoForm" autocomplete="off">
       <textarea id="memoText" placeholder="예: 태블릿에서 이름 글자가 조금 더 컸으면 좋겠어요." aria-label="메모 내용"></textarea>
-      <div class="row"><span>'남기기'를 누르면 GitHub 창이 열려요. 거기서 초록색 <b>Create</b> 단추만 누르면 올라가요(GitHub 로그인 필요).</span><button id="memoSend" type="submit" disabled>남기기</button></div>
+      <div class="row"><span id="memoHint">로그인 없이 바로 남겨져요.</span><button id="memoSend" type="submit" disabled>남기기</button></div>
     </form>
   </div>
 </div>
 <script>
 (() => {
   "use strict";
-  const REPO = "guenhee9474-tech/jari", LABEL = "개선메모", DOING = "반영중", KEYP = "seatdraw.memo.pending";
+  /* 선생님 구글 설문지(응답 받기)와 응답 시트(웹에 게시한 CSV). 비어 있으면 메모 단추를 숨김. */
+  const FORM_ACTION = "https://docs.google.com/forms/d/e/1FAIpQLScM2Yd4crNPiAiqzUm5x30jkyNJUO7Ij4D9LSzI2Hr9i0a-ig/formResponse";   // https://docs.google.com/forms/d/e/<id>/formResponse
+  const ENTRY = "entry.840724152";         // entry.<숫자>  ('메모' 질문)
+  const CSV_NOTE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQwwB6QTA2PiTbD-4DKni5Z7GC6hn97-faGI-maiknPkjDobuLxtWWEl_dQhcntuIw5q1lQXIKUlXec/pub?gid=1514969378&single=true&output=csv";           // https://docs.google.com/spreadsheets/d/e/<id>/pub?gid=...&single=true&output=csv
+  const STATUS = "memo_status.json";   // 같은 저장소: {"<응답 시각>": {"state": "doing|done", "reply": "...", "at": "..."}}
+  const KEYP = "seatdraw.memo.pending";
   const $ = s => document.querySelector(s);
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
-  const pane = $("#memoPane"), list = $("#memoList"), ta = $("#memoText"), send = $("#memoSend");
+  const btn = $("#memoBtn"), pane = $("#memoPane"), list = $("#memoList"), ta = $("#memoText"), send = $("#memoSend"), hint = $("#memoHint");
+  if (!FORM_ACTION || !ENTRY) { btn.hidden = true; return; }
   let loading = false, lastLoad = 0;
   const pend = () => { try { return JSON.parse(localStorage.getItem(KEYP) || "[]"); } catch (e) { return []; } };
   const setPend = a => { try { localStorage.setItem(KEYP, JSON.stringify(a.slice(-20))); } catch (e) {} };
-  const fmt = iso => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 
-  function open(on) { pane.classList.toggle("open", on); if (on) { if (Date.now() - lastLoad > 60000) load(); setTimeout(() => ta.focus(), 50); } }
-  async function gh(path) {
-    const r = await fetch("https://api.github.com/repos/" + REPO + path, { headers: { Accept: "application/vnd.github+json" } });
-    if (!r.ok) throw new Error(r.status === 403 ? "rate" : String(r.status));
-    return r.json();
+  function csvRows(t) {   // 따옴표·줄바꿈이 든 칸도 읽음
+    const rows = []; let row = [], f = "", q = false;
+    for (let i = 0; i < t.length; i++) {
+      const ch = t[i];
+      if (q) { if (ch === '"') { if (t[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ",") { row.push(f); f = ""; }
+      else if (ch === "\n") { row.push(f); rows.push(row); row = []; f = ""; }
+      else if (ch !== "\r") f += ch;
+    }
+    if (f || row.length) { row.push(f); rows.push(row); }
+    return rows;
   }
+  function open(on) { pane.classList.toggle("open", on); if (on) { if (Date.now() - lastLoad > 30000) load(); setTimeout(() => ta.focus(), 50); } }
   async function load() {
     if (loading) return; loading = true; lastLoad = Date.now();
     try {
-      const issues = (await gh(`/issues?labels=${encodeURIComponent(LABEL)}&state=all&per_page=40&sort=created&direction=desc`)).filter(i => !i.pull_request);
-      const withReplies = await Promise.all(issues.map(async i => {
-        if (!i.comments) return { i, cs: [] };
-        try { return { i, cs: await gh(`/issues/${i.number}/comments?per_page=20`) }; } catch (e) { return { i, cs: [] }; }
-      }));
-      const known = new Set(issues.map(i => (i.body || "").trim()));
-      const waiting = pend().filter(p => !known.has(p.text.trim()) && Date.now() - p.at < 3 * 86400000);
+      // 시트는 브라우저에서 바로 못 읽어서(구글이 막음) Claude 가 20분마다 시트를 읽어 같은 저장소의 memo_status.json 에 목록·상태·답을 올림
+      const st = await fetch(STATUS + "?t=" + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+      const rows = Object.entries(st).filter(([at, s]) => s.text && !s.hide).map(([at, s]) => ({ at, text: s.text, s }))
+        .sort((a, b) => (a.s.n || 0) - (b.s.n || 0));
+      const known = new Set(rows.map(r => r.text));
+      const waiting = pend().filter(p => !known.has(p.text) && Date.now() - p.at < 86400000);
       setPend(waiting);
-      render(withReplies, waiting);
+      render(rows.reverse(), waiting);
     } catch (e) {
-      list.innerHTML = "";
-      list.appendChild(el("p", "empty", e.message === "rate" ? "잠시 너무 자주 불러왔어요. 몇 분 뒤 '새로 보기'를 눌러 주세요." : "메모를 불러오지 못했어요. 인터넷 연결을 확인하고 '새로 보기'를 눌러 주세요."));
+      list.innerHTML = ""; list.appendChild(el("p", "empty", "메모 목록을 불러오지 못했어요.\n인터넷 연결을 확인하고 '새로 보기'를 눌러 주세요."));
     } finally { loading = false; }
   }
   function render(rows, waiting) {
     list.innerHTML = "";
     for (const p of waiting.slice().reverse()) {
       const it = el("div", "it"); const top = el("div", "top");
-      top.append(el("span", "st wait", "올라가는 중"), el("span", "", "GitHub 에서 Create 를 눌렀는지 확인해 주세요"));
+      top.append(el("span", "st wait", "보냈어요"), el("span", "", "목록에는 20분쯤 안에 나와요"));
       it.append(top, el("div", "tx", p.text)); list.appendChild(it);
     }
-    for (const { i, cs } of rows) {
+    for (const r of rows) {
       const it = el("div", "it"); const top = el("div", "top");
-      const doing = i.labels.some(l => l.name === DOING);
-      const [cls, name] = i.state === "closed" ? ["done", "반영함"] : doing ? ["doing", "반영 중"] : ["new", "새 메모"];
-      top.append(el("span", "st " + cls, name), el("span", "", fmt(i.created_at)));
-      it.append(top, el("div", "tx", (i.body || i.title || "").trim()));
-      for (const c of cs) { const rp = el("div", "rp"); rp.appendChild(el("b", "", "Claude · " + fmt(c.created_at))); rp.appendChild(document.createTextNode(c.body.trim())); it.appendChild(rp); }
+      const [cls, name] = r.s.state === "done" ? ["done", "반영함"] : r.s.state === "doing" ? ["doing", "반영 중"] : ["new", "새 메모"];
+      top.append(el("span", "st " + cls, name), el("span", "", r.at));
+      it.append(top, el("div", "tx", r.text));
+      if (r.s.reply) { const rp = el("div", "rp"); rp.appendChild(el("b", "", "답" + (r.s.at ? " · " + r.s.at : ""))); rp.appendChild(document.createTextNode(r.s.reply)); it.appendChild(rp); }
       list.appendChild(it);
     }
     if (!list.children.length) list.appendChild(el("p", "empty", "아직 메모가 없어요.\n아래 칸에 바라는 점을 적고 '남기기'를 눌러 주세요."));
   }
   ta.addEventListener("input", () => { send.disabled = !ta.value.trim(); });
-  $("#memoForm").addEventListener("submit", e => {
+  $("#memoForm").addEventListener("submit", async e => {
     e.preventDefault(); const text = ta.value.trim(); if (!text) return;
-    const title = "[개선 메모] " + text.replace(/\s+/g, " ").slice(0, 40);
-    const url = `https://github.com/${REPO}/issues/new?labels=${encodeURIComponent(LABEL)}&title=${encodeURIComponent(title)}&body=${encodeURIComponent(text)}`;
-    window.open(url, "_blank", "noopener");
-    const a = pend(); a.push({ text, at: Date.now() }); setPend(a);
-    ta.value = ""; send.disabled = true; render([], a);
-    setTimeout(load, 20000);
+    send.disabled = true; hint.textContent = "보내는 중…";
+    try {
+      const body = new URLSearchParams(); body.append(ENTRY, text);
+      await fetch(FORM_ACTION, { method: "POST", mode: "no-cors", body });   // 구글 설문지는 응답을 읽을 수 없게 돌려줌(no-cors) — 보내기만 함
+      const a = pend(); a.push({ text, at: Date.now() }); setPend(a);
+      ta.value = ""; hint.textContent = "남겼어요. 고마워요!";
+      render([], a); setTimeout(load, 60000);
+    } catch (err) {
+      hint.textContent = "보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요."; send.disabled = false;
+    }
   });
-  $("#memoBtn").onclick = () => open(true);
+  btn.onclick = () => open(true);
   $("#memoClose").onclick = () => open(false);
   $("#memoReload").onclick = () => load();
   pane.addEventListener("click", e => { if (e.target === pane) open(false); });

@@ -90,7 +90,6 @@ html.tiny-seat .seat .no { display: none; }
 .drag-ghost .top { border: 1.5px solid var(--accent); box-shadow: 0 10px 24px rgba(25,31,40,.18); }
 body.dragging-now, body.dragging-now * { cursor: grabbing !important; }
 @keyframes land { 0% { background: var(--accent-soft); border-color: var(--accent); transform: scale(.96); } 100% { background: var(--surface); transform: none; } }
-#dust { display: none; }
 #big { position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%) scale(.9); z-index: 50; display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: calc(100vw - 32px); padding: clamp(18px, 3.4vh, 48px) clamp(28px, 6vw, 96px); border-radius: 24px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 24px 60px rgba(25,31,40,.18); opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; }
 #big.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 #big .bno { font-size: clamp(16px, 2.2vh, calc(24px * var(--k))); font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
@@ -240,8 +239,9 @@ body.class-file .site-class-only { display: none !important; }
 #printHead { display: none; }
 @page { size: A4 landscape; margin: 10mm; }
 @media print {
+  .seat.spot .top { color: #000 !important; background: #fff !important; border-color: #000 !important; }
   body { background: #fff; overflow: visible; }
-  .bar, .dock, .drawer, .scrim, .secret, .modal, .toast, #dust, .teacher-btn, #big { display: none !important; }
+  .bar, .dock, .drawer, .scrim, .secret, .modal, .toast, .teacher-btn, #big { display: none !important; }
   #printHead { display: flex; justify-content: space-between; align-items: baseline; position: static; margin: 0 0 6mm; font-size: 16pt; font-weight: 700; color: #000; }
   #printHead small { font-size: 10pt; font-weight: 500; }
   .room { position: static; inset: auto; gap: 6mm; }
@@ -308,7 +308,6 @@ body.class-file .site-class-only { display: none !important; }
   <div class="front"><div class="chalkboard" id="board">칠판</div><div class="podium">교탁</div></div>
   <div class="grid-wrap" id="gridWrap"><div class="seats" id="seats"></div></div>
 </main>
-<canvas id="dust"></canvas>
 
 <div class="dock" id="dock">
   <span class="count" id="count"></span>
@@ -524,7 +523,7 @@ function fixEntry(h) {
     const d = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(at) ? new Date(at.replace(" ", "T") + ":00Z") : null;
     if (d && !isNaN(d)) { at = stamp(d); date = at.slice(0, 10); } else date = isDate(at.slice(0, 10)) ? at.slice(0, 10) : today();
   }
-  const e = { id: h.id || uid(), date, memo: typeof h.memo === "string" ? h.memo.slice(0, 60) : "", at: at || date + " 00:00", map: h.map };
+  const e = { id: h.id || uid(), date, memo: typeof h.memo === "string" ? h.memo.slice(0, 60) : "", at: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(at) ? at : date + " 00:00", map: h.map };
   if (typeof h.t === "number" && isFinite(h.t)) e.t = h.t;
   if (h.lay && +h.lay.rows > 0 && +h.lay.cols > 0) e.lay = { rows: +h.lay.rows, cols: +h.lay.cols, group: +h.lay.group || 1, vgroup: +h.lay.vgroup || 1, off: Array.isArray(h.lay.off) ? h.lay.off.slice() : [] };
   return e;
@@ -551,11 +550,45 @@ function normalize(o) {
   return o;
 }
 const sig = h => h.date + "|" + Object.keys(h.map).sort().map(k => k + "=" + h.map[k]).join(",");   // 같은 날짜·같은 자리인지
+/* 가져온 자리의 학생 id(번호_이름)를 이 학급 명렬의 id 로 맞추는 표. 수업 파일에서 이름이나 번호를 고쳤어도
+   같은 학생이면 같은 자리로 보게 함: 이름이 하나뿐이면 이름으로, 아니면 번호가 하나뿐일 때 번호로
+   (번호로 잇기는 같은 반이라고 볼 만할 때만 — 들어온 학생의 절반 이상이 이름으로 이미 맞을 때). */
+function idTranslator(c, entries) {
+  const roster = parseRoster(c.roster); const now = new Set(roster.map(x => x.id));
+  const byName = {}, byNo = {};
+  for (const x of roster) { (byName[x.name] = byName[x.name] || []).push(x.id); (byNo[x.no] = byNo[x.no] || []).push(x.id); }
+  const ids = new Set(); for (const h of entries) for (const v of Object.values(h.map || {})) if (v) ids.add(String(v));
+  const map = {}; let known = 0;
+  for (const id of ids) {
+    if (now.has(id)) { known++; continue; }
+    const n = byName[idName(id)]; if (n && n.length === 1) { map[id] = n[0]; known++; }
+  }
+  if (ids.size && known * 2 >= ids.size)
+    for (const id of ids) if (!now.has(id) && !map[id]) { const n = byNo[idNo(id)]; if (n && n.length === 1) map[id] = n[0]; }
+  return map;
+}
+function remapEntry(h, map) {   // 한 기록 안에서 같은 학생이 두 자리에 생기지 않게 옮김
+  const vals = new Set(Object.values(h.map)); const out = {};
+  for (const [k, v] of Object.entries(h.map)) { const t = map[v]; if (t && t !== v && !vals.has(t)) { out[k] = t; vals.add(t); } else out[k] = v; }
+  return Object.assign({}, h, { map: out });
+}
+function dedupHist(c, map = {}) {   // 날짜·자리가 같은 기록은 하나만(메모는 살림). 지운 개수를 돌려줌
+  const keep = new Map(); const out = [];
+  for (const h of c.history) {
+    const s = sig(remapEntry(h, map)); const k = keep.get(s);
+    if (!k) { keep.set(s, h); out.push(h); continue; }
+    if (!k.memo && h.memo) k.memo = h.memo;
+    if (c.loadedId === h.id) c.loadedId = k.id;
+  }
+  const n = c.history.length - out.length; c.history = out; return n;
+}
 function mergeHist(c, list) {
-  const have = new Set(c.history.map(sig)); let n = 0;
-  for (const raw of list || []) {
-    if (!raw || !raw.map || typeof raw.map !== "object") continue;
-    const h = fixEntry(Object.assign({}, raw, { id: null })); const s = sig(h);
+  list = (list || []).filter(raw => raw && raw.map && typeof raw.map === "object");
+  const old = idTranslator(c, c.history), tr = idTranslator(c, list);   // 번호로 잇기 여부는 이 학급 기록·들어온 기록을 따로 봄(다른 반 기록을 번호로 잇지 않게)
+  dedupHist(c, old);   // 예전에 이름이 달라 쌍으로 들어간 기록도 이참에 정리
+  const have = new Set(c.history.map(h => sig(remapEntry(h, old)))); let n = 0;
+  for (const raw of list) {
+    const h = fixEntry(remapEntry(Object.assign({}, raw, { id: null }), tr)); const s = sig(h);
     if (have.has(s)) continue; have.add(s); c.history.push(h); n++;
   }
   sortHist(c); return n;
@@ -600,8 +633,8 @@ const byId = () => Object.fromEntries(students().map(s => [s.id, s]));
 
 /* 명렬에서 이름(또는 번호)을 고치면 학생 id(번호_이름)가 바뀜 → 지금 자리·저장한 자리·빠진 학생·규칙의 옛 id 를 새 id 로 옮김.
    같은 이름이 하나뿐이면 이름으로(번호를 고친 경우), 아니면 같은 번호가 하나뿐일 때 번호로(이름을 고친 경우) 잇는다. */
-const idNo = id => { const m = /^s(\d+)_/.exec(id); return m ? m[1] : null; };
-const idName = id => String(id).replace(/^s\d+_/, "");
+function idNo(id) { const m = /^s(\d+)_/.exec(id); return m ? m[1] : null; }   // 함수로 둠: 시작할 때(수업 파일 합치기) 먼저 불림
+function idName(id) { return String(id).replace(/^s\d+_/, ""); }
 function remapRules(R, map) {
   const m = id => map[id] || id; R = R || {};
   return { fix: Object.fromEntries(Object.entries(R.fix || {}).map(([id, k]) => [m(id), k])),
@@ -724,9 +757,27 @@ function solve(c = C()) {
 /* ---------------- 그리기 ---------------- */
 let view = "student", editingOff = false, drawing = false, revealing = false;
 function insets() {   // 위 막대·아래 단추 줄의 실제 높이만큼 교실을 비켜 둠 (줄바꿈·확대·회전에도)
+  dodgeMemo();
   const b = $("#bar").getBoundingClientRect(), d = $("#dock").getBoundingClientRect(), r = document.documentElement.style;
   r.setProperty("--top", Math.round(b.bottom) + "px");
   r.setProperty("--bot", Math.max(0, Math.round(innerHeight - d.top + 10)) + "px");
+}
+function dodgeMemo() {   // 좁은 화면: 오른쪽 아래 '개선 메모' 단추가 아래 단추 줄을 덮지 않게 비켜 둠
+  const dock = $("#dock"), mb = document.getElementById("memoBtn"); if (!dock) return;
+  dock.style.paddingRight = ""; dock.style.bottom = "";
+  if (!mb || !mb.getClientRects().length) return;   // 수업 화면·인쇄에서는 숨어 있음
+  const m = mb.getBoundingClientRect(); if (!m.width) return;
+  const hit = () => [...dock.querySelectorAll("button")].some(x => {
+    if (x.hidden || !x.getClientRects().length) return false; const r = x.getBoundingClientRect();
+    return r.width > 0 && r.right > m.left - 8 && r.left < m.right && r.bottom > m.top - 8 && r.top < m.bottom + 8;
+  });
+  if (!hit()) return;
+  const k = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--k")) || 1;   // 단추 줄에는 zoom(--k)이 걸려 있음
+  const h0 = dock.getBoundingClientRect().height;
+  dock.style.paddingRight = ((innerWidth - m.left + 10) / k).toFixed(1) + "px";   // 1) 옆으로 비킴: 줄이 늘지 않을 때만
+  if (dock.getBoundingClientRect().height <= h0 + 4 && !hit()) return;
+  dock.style.paddingRight = "";                                                   // 2) 아니면 메모 단추 위로 올림
+  dock.style.bottom = ((innerHeight - m.top + 8) / k).toFixed(1) + "px";
 }
 function sizeVars() {   // 자리판이 남은 칸에 꽉 차되 넘치지 않게 책상 크기를 계산
   const c = C(); const wrap = $("#gridWrap"); if (!wrap) return;
@@ -738,7 +789,7 @@ function sizeVars() {   // 자리판이 남은 칸에 꽉 차되 넘치지 않�
   const gapUnits = vg > 1 ? (c.rows - c.rows / vg) * .3 + (c.rows / vg - 1) * 2.6 : c.rows - 1;
   const shH = (H - c.rows * 8) / (c.rows + .22 * gapUnits);
   const tall = H > W * 1.1;   // 세로로 긴 화면(휴대폰·태블릿 세로): 책상을 조금 세로로 길게 해 남는 높이를 씀
-  let sw = Math.min(swW, 230 * k), sh = Math.min(shH, sw * (tall ? 1.2 : .8), 132 * k);
+  let sw = Math.min(swW, 230 * k), sh = Math.min(shH, sw * (tall ? 1.6 : .8), 132 * k);
   sw = Math.min(sw, sh * (sh < 40 ? 3.4 : 2.3));   // 키가 낮은 화면(휴대폰 가로)은 책상을 옆으로 넓게
   sw = Math.max(40, sw); sh = Math.max(22, sh);
   const fs = Math.max(10, Math.min(54 * k, sh * (sh < 36 ? .56 : .42), sw * .28));   // 낮은 자리는 번호를 빼므로 이름을 키움
@@ -788,20 +839,7 @@ const canDrag = () => { const c = C(); return !drawing && !revealing && !editing
 function markDraggable() { const ok = canDrag(); const cur = C().current || {}; const by = byId(); document.querySelectorAll("#seats .seat").forEach(s => s.classList.toggle("can-drag", ok && !!by[cur[s.dataset.key]] && !s.classList.contains("off"))); }
 
 /* ---------------- 뽑기 연출 ---------------- */
-const dust = $("#dust"), dctx = dust.getContext("2d"); let parts = [];
-function fitDust() { dust.width = innerWidth * devicePixelRatio; dust.height = innerHeight * devicePixelRatio; }
-function puff(x, y, n = 8) {
-  if (reduced) return;
-  for (let i = 0; i < n; i++) parts.push({ x, y, vx: (Math.random() - .5) * 2.4, vy: (Math.random() - .9) * 2.2, life: 1, r: 1 + Math.random() * 2.4, c: ["79,140,255", "155,107,255", "255,122,168"][rnd(3)] });
-}
-function tick() {
-  if (parts.length) {
-    dctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); dctx.clearRect(0, 0, innerWidth, innerHeight);
-    parts = parts.filter(p => p.life > 0);
-    for (const p of parts) { p.x += p.vx; p.y += p.vy; p.vy += .05; p.life -= .022; dctx.fillStyle = `rgba(${p.c},${p.life * .9})`; dctx.beginPath(); dctx.arc(p.x, p.y, p.r, 0, 7); dctx.fill(); }
-  }
-  requestAnimationFrame(tick);
-}
+/* 자리가 내려앉을 때 가루 효과는 뺐어요(디자인 규칙: 반짝이 장식 없음). 내려앉는 움직임(.landed)만 남김. */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pendingMap = null, revealQueue = [];
 function seatEl(key) { return $(`#seats .seat[data-key="${key}"]`); }
@@ -836,7 +874,7 @@ async function draw() {
   const order = shuffle(keys.slice()); const step = Math.max(28, Math.min(110, 2600 / order.length));
   for (const k of order) {
     const e = seatEl(k); const s = by[res.map[k]]; paint(e, s);
-    if (s) { e.classList.remove("landed"); void e.offsetWidth; e.classList.add("landed"); const b = e.getBoundingClientRect(); puff(b.left + b.width / 2, b.top + b.height / 2); }
+    if (s) { e.classList.remove("landed"); void e.offsetWidth; e.classList.add("landed"); }
     if (!reduced) await sleep(step);
   }
   c.current = res.map; save();
@@ -956,7 +994,7 @@ function afterImport(c, p, msg) {   // 가져온 명렬이 다르면 바꿀지 �
   if (p.roster.trim() && c.roster.trim() !== p.roster.trim()) {
     if (!c.roster.trim()) { c.roster = p.roster; save(); render(); toast(msg); return; }
     ask("명렬도 바꿀까요?", msg + " 가져온 명렬이 이 학급 명렬과 달라요. 수업 파일에서 이름을 고쳤다면 바꿔 주세요.", null,
-      [["명렬 바꾸기", () => { c.roster = p.roster; reconcile(c); save(); render(); if ($("#drawer").classList.contains("open")) fillSet(); toast("명렬을 바꿨어요."); }]]);
+      [["명렬 바꾸기", () => { c.roster = p.roster; reconcile(c); const d = dedupHist(c); sortHist(c); save(); render(); renderSaved(); if ($("#drawer").classList.contains("open")) fillSet(); toast("명렬을 바꿨어요." + (d ? ` 겹친 자리 ${d}개는 하나로 합쳤어요.` : "")); }]]);
   } else toast(msg);
 }
 const mergedMsg = n => n ? `저장한 자리 ${n}개를 합쳤어요.` : "새로 합칠 자리가 없었어요(모두 이미 있어요).";
@@ -1331,7 +1369,7 @@ function setClassMode(on) {
   openSet(false); openSecret(false); editingOff = false; $("#btnEditOff").textContent = "빈자리 고르기"; $("#savedM").classList.remove("open");
   const c = C(); if (on) { c.current = null; c.loadedId = null; }
   resetDock(); $("#btnDraw").hidden = false; $("#btnDraw").textContent = "자리 뽑기";
-  render();
+  render(); if (on) wake();
 }
 function classFile() {
   const c = clone(C()); c.current = null; delete c.loadedId; delete c.idmap;
@@ -1376,7 +1414,7 @@ function start() {
   if (CLASS_FILE) { document.body.classList.add("class-mode", "class-file"); document.querySelectorAll("[data-secret]").forEach(x => x.remove()); }
   else if (classMode) document.body.classList.add("class-mode");
   const de = document.documentElement; if (!de.requestFullscreen && !de.webkitRequestFullscreen) $("#btnFull").hidden = true;   // 아이폰 등
-  fitDust(); tick(); fillPick(); bindSet(); render(); wake();
+  fillPick(); bindSet(); render(); wake();
   $("#clsPick").onchange = e => { S.active = e.target.value; editingOff = false; resetDock(); save(); fillSet(); render(); };
   $("#btnView").onclick = $("#btnView2").onclick = () => setView(view === "student" ? "teacher" : "student");
   $("#btnFull").onclick = toggleFull;
@@ -1450,10 +1488,11 @@ function start() {
     eatClick = 0;
   }, true);
   // 화면 크기·회전·주소창 변화·확대에 맞춰 다시 잼
-  let raf = 0; const relayout = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { fitDust(); layout(); }); };
+  let raf = 0; const relayout = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { layout(); }); };
   addEventListener("resize", relayout); addEventListener("orientationchange", relayout);
   if (window.visualViewport) visualViewport.addEventListener("resize", relayout);
   if (window.ResizeObserver) { const ro = new ResizeObserver(relayout); [$("#bar"), $("#dock"), $("#room")].forEach(x => ro.observe(x)); }
+  if (window.MutationObserver) new MutationObserver(relayout).observe($("#dock"), { subtree: true, attributes: true, attributeFilter: ["hidden"] });   // 단추가 나타나고 사라질 때(메모 단추 피하기)
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
   if (!CLASS_FILE) { importFromHash(); addEventListener("hashchange", importFromHash); }
   window.claude?.hot?.snapshot?.(() => S);
@@ -1469,6 +1508,7 @@ if (window.claude?.hot?.ready) window.claude.hot.ready(d => { const o = d && d.c
 #memoBtn { position: fixed; z-index: 60; right: calc(14px + env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   font: 600 14px var(--f-body, system-ui); color: var(--accent, #2b59c3); background: var(--surface, #fff); border: 1px solid var(--line, #e5e8eb);
   border-radius: 999px; padding: 0 16px; min-height: 44px; cursor: pointer; box-shadow: 0 2px 8px rgba(25, 31, 40, .08); }
+#memoBtn { font-size: calc(14px * var(--k, 1)); min-height: calc(44px * var(--k, 1)); padding: 0 calc(16px * var(--k, 1)); }
 body.class-mode #memoBtn, body.printing #memoBtn { display: none; }
 @media print { #memoBtn, #memoPane { display: none !important; } }
 #memoPane { position: fixed; inset: 0; z-index: 70; display: none; background: rgba(25, 31, 40, .35); }
@@ -1502,95 +1542,74 @@ body.class-mode #memoBtn, body.printing #memoBtn { display: none; }
 <button id="memoBtn" type="button" title="자리 뽑기에 바라는 점 남기기">개선 메모</button>
 <div id="memoPane" role="dialog" aria-modal="true" aria-label="개선 메모">
   <div class="mp">
-    <header><b>개선 메모</b><button class="mx" id="memoReload" type="button">새로 보기</button><button class="mx" id="memoClose" type="button">닫기</button></header>
-    <p class="note">불편한 점이나 바라는 기능을 적어 주세요. 20분쯤 안에 읽고 고친 뒤 여기에 답을 달아요. 메모는 쓰시는 모든 선생님이 함께 보니 <b>학생 이름은 적지 마세요.</b></p>
+    <header><b>개선 메모</b><button class="mx" id="memoClose" type="button">닫기</button></header>
+    <p class="note">불편한 점이나 바라는 기능을 적어 주세요. 20분쯤 안에 읽고 고친 뒤 여기에 답을 달아요. 남긴 메모는 관리자만 보고, 여기에는 이 기기에서 쓴 내 메모만 보여요. <b>학생 이름은 적지 마세요.</b></p>
     <div id="memoList" aria-live="polite"><p class="empty">메모를 불러오는 중이에요…</p></div>
     <form id="memoForm" autocomplete="off">
       <textarea id="memoText" placeholder="예: 태블릿에서 이름 글자가 조금 더 컸으면 좋겠어요." aria-label="메모 내용"></textarea>
-      <div class="row"><span id="memoHint">로그인 없이 바로 남겨져요.</span><button id="memoSend" type="submit" disabled>남기기</button></div>
+      <div class="row"><span id="memoHint"></span><button id="memoSend" type="submit" disabled>남기기</button></div>
     </form>
   </div>
 </div>
 <script>
 (() => {
   "use strict";
-  /* 선생님 구글 설문지(응답 받기)와 응답 시트(웹에 게시한 CSV). 비어 있으면 메모 단추를 숨김. */
+  /* 선생님 구글 설문지로 보내기만 함(응답 시트 주소는 페이지에 두지 않음 — 관리자만 봄). 비어 있으면 메모 단추를 숨김. */
   const FORM_ACTION = "https://docs.google.com/forms/d/e/1FAIpQLScM2Yd4crNPiAiqzUm5x30jkyNJUO7Ij4D9LSzI2Hr9i0a-ig/formResponse";   // https://docs.google.com/forms/d/e/<id>/formResponse
   const ENTRY = "entry.840724152";         // entry.<숫자>  ('메모' 질문)
-  const CSV_NOTE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQwwB6QTA2PiTbD-4DKni5Z7GC6hn97-faGI-maiknPkjDobuLxtWWEl_dQhcntuIw5q1lQXIKUlXec/pub?gid=1514969378&single=true&output=csv";           // https://docs.google.com/spreadsheets/d/e/<id>/pub?gid=...&single=true&output=csv
-  const STATUS = "memo_status.json";   // 같은 저장소: {"<응답 시각>": {"state": "doing|done", "reply": "...", "at": "..."}}
-  const KEYP = "seatdraw.memo.pending";
+  const STATUS = "memo_status.json";   // 공개 파일: 글의 해시 → {state, reply, at} — 메모 글은 없음(관리자만 시트에서 봄)
+  const KEYM = "seatdraw.memo.mine";     // 이 기기에서 쓴 내 메모: [{text, at}]
   const $ = s => document.querySelector(s);
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const btn = $("#memoBtn"), pane = $("#memoPane"), list = $("#memoList"), ta = $("#memoText"), send = $("#memoSend"), hint = $("#memoHint");
   if (!FORM_ACTION || !ENTRY) { btn.hidden = true; return; }
-  let loading = false, lastLoad = 0;
-  const pend = () => { try { return JSON.parse(localStorage.getItem(KEYP) || "[]"); } catch (e) { return []; } };
-  const setPend = a => { try { localStorage.setItem(KEYP, JSON.stringify(a.slice(-20))); } catch (e) {} };
-
-  function csvRows(t) {   // 따옴표·줄바꿈이 든 칸도 읽음
-    const rows = []; let row = [], f = "", q = false;
-    for (let i = 0; i < t.length; i++) {
-      const ch = t[i];
-      if (q) { if (ch === '"') { if (t[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
-      else if (ch === '"') q = true;
-      else if (ch === ",") { row.push(f); f = ""; }
-      else if (ch === "\n") { row.push(f); rows.push(row); row = []; f = ""; }
-      else if (ch !== "\r") f += ch;
-    }
-    if (f || row.length) { row.push(f); rows.push(row); }
-    return rows;
-  }
-  function open(on) { pane.classList.toggle("open", on); if (on) { if (Date.now() - lastLoad > 30000) load(); setTimeout(() => ta.focus(), 50); } }
-  async function load() {
-    if (loading) return; loading = true; lastLoad = Date.now();
+  let loading = false;
+  const mine = () => { try { const a = JSON.parse(localStorage.getItem(KEYM) || "[]"); if (Array.isArray(a)) return a; } catch (e) {} return []; };
+  const setMine = a => { try { localStorage.setItem(KEYM, JSON.stringify(a.slice(-50))); } catch (e) {} };
+  try { const old = JSON.parse(localStorage.getItem("seatdraw.memo.pending") || "[]"); if (old.length) { setMine(mine().concat(old)); localStorage.removeItem("seatdraw.memo.pending"); } } catch (e) {}
+  async function key(text) {   // memo.py 의 key() 와 같음: sha256(글) 앞 20자리
     try {
-      // 시트는 브라우저에서 바로 못 읽어서(구글이 막음) Claude 가 20분마다 시트를 읽어 같은 저장소의 memo_status.json 에 목록·상태·답을 올림
-      const st = await fetch(STATUS + "?t=" + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
-      const rows = Object.entries(st).filter(([at, s]) => s.text && !s.hide).map(([at, s]) => ({ at, text: s.text, s }))
-        .sort((a, b) => (a.s.n || 0) - (b.s.n || 0));
-      const known = new Set(rows.map(r => r.text));
-      const waiting = pend().filter(p => !known.has(p.text) && Date.now() - p.at < 86400000);
-      setPend(waiting);
-      render(rows.reverse(), waiting);
-    } catch (e) {
-      list.innerHTML = ""; list.appendChild(el("p", "empty", "메모 목록을 불러오지 못했어요.\n인터넷 연결을 확인하고 '새로 보기'를 눌러 주세요."));
-    } finally { loading = false; }
+      const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text.trim()));
+      return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 20);
+    } catch (e) { return ""; }   // 파일로 연 수업 파일 등 crypto.subtle 이 없으면 상태만 못 봄
   }
-  function render(rows, waiting) {
+  const fmt = ms => { const d = new Date(ms); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+  function open(on) { pane.classList.toggle("open", on); if (on) { load(); setTimeout(() => ta.focus(), 50); } }
+  async function load() {
+    if (loading) return; loading = true;
+    let st = {};
+    try { st = await fetch(STATUS + "?t=" + Date.now()).then(r => r.ok ? r.json() : {}); } catch (e) { st = {}; }
+    const rows = await Promise.all(mine().map(async m => ({ ...m, s: st[await key(m.text)] || {} })));
+    render(rows.reverse()); loading = false;
+  }
+  function render(rows) {
     list.innerHTML = "";
-    for (const p of waiting.slice().reverse()) {
-      const it = el("div", "it"); const top = el("div", "top");
-      top.append(el("span", "st wait", "보냈어요"), el("span", "", "목록에는 20분쯤 안에 나와요"));
-      it.append(top, el("div", "tx", p.text)); list.appendChild(it);
-    }
     for (const r of rows) {
       const it = el("div", "it"); const top = el("div", "top");
-      const [cls, name] = r.s.state === "done" ? ["done", "반영함"] : r.s.state === "doing" ? ["doing", "반영 중"] : ["new", "새 메모"];
-      top.append(el("span", "st " + cls, name), el("span", "", r.at));
+      const [cls, name] = r.s.state === "done" ? ["done", "반영함"] : r.s.state === "doing" ? ["doing", "반영 중"] : r.s.state ? ["new", "읽기 전"] : ["wait", "보냈어요"];
+      top.append(el("span", "st " + cls, name), el("span", "", fmt(r.at)));
       it.append(top, el("div", "tx", r.text));
       if (r.s.reply) { const rp = el("div", "rp"); rp.appendChild(el("b", "", "답" + (r.s.at ? " · " + r.s.at : ""))); rp.appendChild(document.createTextNode(r.s.reply)); it.appendChild(rp); }
       list.appendChild(it);
     }
-    if (!list.children.length) list.appendChild(el("p", "empty", "아직 메모가 없어요.\n아래 칸에 바라는 점을 적고 '남기기'를 눌러 주세요."));
+    if (!list.children.length) list.appendChild(el("p", "empty", "아직 남긴 메모가 없어요.\n아래 칸에 바라는 점을 적고 '남기기'를 눌러 주세요."));
   }
-  ta.addEventListener("input", () => { send.disabled = !ta.value.trim(); });
+  ta.addEventListener("input", () => { send.disabled = !ta.value.trim(); if (hint.textContent) hint.textContent = ""; });
   $("#memoForm").addEventListener("submit", async e => {
     e.preventDefault(); const text = ta.value.trim(); if (!text) return;
     send.disabled = true; hint.textContent = "보내는 중…";
     try {
       const body = new URLSearchParams(); body.append(ENTRY, text);
       await fetch(FORM_ACTION, { method: "POST", mode: "no-cors", body });   // 구글 설문지는 응답을 읽을 수 없게 돌려줌(no-cors) — 보내기만 함
-      const a = pend(); a.push({ text, at: Date.now() }); setPend(a);
+      const a = mine(); a.push({ text, at: Date.now() }); setMine(a);
       ta.value = ""; hint.textContent = "남겼어요. 고마워요!";
-      render([], a); setTimeout(load, 60000);
+      load();
     } catch (err) {
       hint.textContent = "보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요."; send.disabled = false;
     }
   });
   btn.onclick = () => open(true);
   $("#memoClose").onclick = () => open(false);
-  $("#memoReload").onclick = () => load();
   pane.addEventListener("click", e => { if (e.target === pane) open(false); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && pane.classList.contains("open")) { e.stopPropagation(); open(false); } }, true);
 })();

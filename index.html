@@ -327,8 +327,8 @@ body.class-file .site-class-only { display: none !important; }
       <h3>교실로 가져가기</h3>
       <div class="btns"><button class="btn primary" id="btnSecret" data-secret>몰래 정하기</button><button class="btn" id="btnClassMode">이 컴퓨터에서 수업 화면으로</button><button class="btn" id="btnClassFile">수업 파일 내려받기</button></div>
       <p class="hint" data-secret>'몰래 정하기'는 교무실에서만 쓰세요(Ctrl+Shift+Y 로도 열려요). 교실 컴퓨터에서는 내려받은 수업 파일을 여세요. 수업 파일에도 지금까지 저장한 자리가 함께 들어가고, 파일에서 고친 것은 그 컴퓨터에 남아요. 수업 화면에는 몰래 정하기가 아예 없고, 규칙은 숨은 채로 지켜져요.</p>
-      <label class="check"><input type="checkbox" id="fRedraw"> 수업 화면에서 '다시 뽑기' 보이기</label>
-      <p class="hint" data-secret>다시 뽑으면 자리를 정해 둔 학생은 매번 같은 자리에 앉아 눈치챌 수 있어요. 한 번만 뽑는 것을 권해요.</p>
+      <label class="check"><input type="checkbox" id="fRedraw" checked> 수업 화면에서 '다시 뽑기' 보이기</label>
+      <p class="hint" data-secret>다시 뽑으면 자리를 정해 둔 학생은 매번 같은 자리에 앉아 눈치챌 수 있어요. 걱정되면 이 칸을 끄세요.</p>
     </section>
     <section class="sec class-only o1">
       <h3>화면</h3>
@@ -457,7 +457,8 @@ body.class-file .site-class-only { display: none !important; }
     <li><b>전체 화면</b>을 누르고 <b>자리 뽑기</b>를 누르세요. '한 명씩' 공개로 해 두었다면 <kbd>Space</kbd>로 한 자리씩 열어요.</li>
     <li>뽑은 뒤 이름 카드를 <b>끌어다 다른 자리에 놓으면</b> 서로 바뀌어요. 마우스도, 손가락(태블릿·전자칠판)도 돼요.</li>
     <li>수업 화면 왼쪽 아래 작은 <b>선생님</b> 단추를 누르면 오늘 빠진 학생 고르기, 명렬(이름) 고치기, 저장한 자리 보기·불러오기, 인쇄를 할 수 있어요. 명렬에서 이름이나 번호를 고쳐도 그 학생의 자리와 저장한 자리는 그대로 따라가요.</li>
-    <li data-secret>다시 뽑으면 자리를 정해 둔 학생이 매번 같은 자리에 앉아 눈치챌 수 있어서, 수업 화면에서는 기본으로 한 번만 뽑게 해 두었어요.</li>
+    <li>뽑은 뒤 <b>다시 뽑기</b>로 마음에 들 때까지 여러 번 돌려 볼 수 있어요.</li>
+    <li data-secret>다시 뽑으면 자리를 정해 둔 학생이 매번 같은 자리에 앉아 눈치챌 수 있어요. 걱정되면 설정에서 '수업 화면에서 다시 뽑기 보이기'를 끄세요.</li>
   </ol>
   <h4>4. 날짜별로 저장하고 다시 불러오기</h4>
   <ol>
@@ -868,7 +869,7 @@ async function draw() {
     els.forEach(e => { paint(e, null); e.classList.remove("empty"); e.classList.add("q"); });
     pendingMap = res.map; revealQueue = shuffle(keys.slice());
     $("#btnNext").hidden = false; drawing = false; $("#btnDraw").disabled = false; $("#btnDraw").textContent = "다시 뽑기";
-    if (classMode && !c.redraw) $("#btnDraw").hidden = true;
+    if (classMode && c.redraw === false) $("#btnDraw").hidden = true;
     return;
   }
   const order = shuffle(keys.slice()); const step = Math.max(28, Math.min(110, 2600 / order.length));
@@ -879,7 +880,7 @@ async function draw() {
   }
   c.current = res.map; save();
   drawing = false; $("#btnDraw").disabled = false; $("#btnDraw").textContent = "다시 뽑기"; $("#btnKeep").hidden = false;
-  if (classMode && !c.redraw) $("#btnDraw").hidden = true;
+  if (classMode && c.redraw === false) $("#btnDraw").hidden = true;
   markDraggable(); layout();
 }
 function revealNext() {
@@ -1044,7 +1045,7 @@ function openSet(open) {
 function fillSet() {
   const c = C();
   $("#fName").value = c.name; $("#fRoster").value = c.roster; $("#fRows").value = c.rows; $("#fCols").value = c.cols; $("#fGroup").value = c.group;
-  $("#fCount").value = students().length || 30; $("#fRedraw").checked = !!c.redraw; $("#fMix").checked = !!c.mix; document.querySelectorAll("#layouts .lay").forEach(b => b.classList.toggle("on", +b.dataset.g === c.group && +b.dataset.v === (c.vgroup || 1))); $("#fPrev").checked = c.prev !== false;
+  $("#fCount").value = students().length || 30; $("#fRedraw").checked = c.redraw !== false; $("#fMix").checked = !!c.mix; document.querySelectorAll("#layouts .lay").forEach(b => b.classList.toggle("on", +b.dataset.g === c.group && +b.dataset.v === (c.vgroup || 1))); $("#fPrev").checked = c.prev !== false;
   document.querySelectorAll("#segReveal button").forEach(b => b.classList.toggle("on", b.dataset.v === c.reveal));
   renderHist(); renderAbsent();
 }

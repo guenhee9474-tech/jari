@@ -156,6 +156,9 @@ textarea { min-height: 150px; resize: vertical; line-height: 1.55; }
 .sv-memo { margin-top: 2px; font-size: 14px; word-break: break-all; }
 .sv-memo.none { color: var(--ink-3); }
 .sv-meta { margin-top: 4px; font-size: 12.5px; color: var(--ink-2); }
+.my-note { font-size: 12px; font-weight: 500; color: var(--ink-2); margin-left: 6px; }
+.sv-avoid { min-height: 32px; font-size: 13px; margin-top: 2px; color: var(--ink-2); }
+.sv-avoid input { width: 18px; height: 18px; }
 .sv-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .sv-acts .btn { padding: 0 12px; }
 .mhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -344,7 +347,7 @@ body.class-file .site-class-only { display: none !important; }
         <button class="btn" data-act="json-load">자리표 파일 불러오기</button>
         <button class="btn file-only" data-act="to-site">사이트에 저장</button>
       </div>
-      <p class="hint">'이 자리로 정하기'를 누르면 날짜와 함께 여기 남아요. 가장 최근 날짜의 자리는 다음 뽑기 때 지난 짝을 피하는 데 써요.<span class="file-only"> '사이트에 저장'을 누르면 자리 뽑기 사이트가 새 탭으로 열리면서 같은 이름의 학급에 합쳐져요.</span></p>
+      <p class="hint">'이 자리로 정하기'를 누르면 날짜와 함께 여기 남아요. 저장할 때 '다음 뽑기 때 이 자리의 짝 피하기'를 켜 둔(기본) 가장 최근 자리로 다음 뽑기 때 지난 짝을 피해요.<span class="file-only"> '사이트에 저장'을 누르면 자리 뽑기 사이트가 새 탭으로 열리면서 같은 이름의 학급에 합쳐져요.</span></p>
     </section>
     <section class="sec prep-only">
       <h3>학급</h3>
@@ -393,6 +396,7 @@ body.class-file .site-class-only { display: none !important; }
       </div>
       <label class="check" style="margin-top:10px"><input type="checkbox" id="fMix"> 짝은 될 수 있으면 남녀 섞기</label>
       <label class="check"><input type="checkbox" id="fPrev" checked> 지난번 짝과 다시 짝이 되지 않게</label>
+      <p class="hint">저장한 자리 중 '다음 뽑기 때 이 자리의 짝 피하기'를 켜 둔 가장 최근 자리를 기준으로 해요.</p>
     </section>
     <section class="sec prep-only">
       <h3>표로 복사 · 백업</h3>
@@ -402,6 +406,11 @@ body.class-file .site-class-only { display: none !important; }
         <button class="btn" id="btnRestore">백업 불러오기</button>
       </div>
       <p class="hint">명렬과 자리는 이 브라우저에만 저장돼요. 인터넷으로 보내지 않아요. 다른 컴퓨터에서 쓰려면 백업 글을 복사해 두었다가 불러오세요.</p>
+    </section>
+    <section class="sec" id="mySec">
+      <h3>내 설정 <small class="my-note">이 기기에만</small></h3>
+      <div id="myList"></div>
+      <p class="hint">여기서 켜고 끈 것은 이 기기의 이 브라우저에만 남아요. 같은 사이트를 쓰는 다른 선생님 화면은 바뀌지 않아요. 개선 메모로 바란 글자·문구·배치 같은 것은 여기에 켜고 끄는 칸으로 생겨요(처음엔 꺼짐).</p>
     </section>
   </div>
 </aside>
@@ -464,7 +473,8 @@ body.class-file .site-class-only { display: none !important; }
   <ol>
     <li>마음에 들면 <b>이 자리로 정하기</b>를 누르세요. 날짜(기본은 오늘)와 메모를 붙여 저장돼요. 같은 날짜에 또 저장하면 덮어쓸지, 하나 더 둘지 물어봐요.</li>
     <li>위쪽 <b>저장한 자리</b>(수업 화면에서는 <b>선생님 → 저장한 자리 보기</b>)에서 날짜 순 목록을 보고 <b>불러오기</b>·<b>이름 바꾸기</b>·<b>지우기</b>를 할 수 있어요. 불러온 자리도 끌어서 바꾼 뒤 다시 저장할 수 있어요.</li>
-    <li>가장 최근 날짜의 자리는 다음 뽑기 때 지난 짝을 피하는 데 써요.</li>
+    <li>저장할 때 <b>다음 뽑기 때 이 자리의 짝 피하기</b>가 켜져 있어요(기본). 켜 둔 자리 중 가장 최근 것의 짝을 다음 뽑기 때 피해요. 시험 삼아 저장하는 자리라면 끄고 저장하세요. 저장한 자리 목록에서도 자리마다 켜고 끌 수 있어요.</li>
+    <li>설정의 <b>지난번 짝과 다시 짝이 되지 않게</b>를 끄면 저장한 자리와 상관없이 짝 피하기를 하지 않아요.</li>
     <li>수업 파일에서 저장한 것은 그 컴퓨터의 그 브라우저에 남아요. 같은 파일을 다시 열면 하던 그대로 나와요.</li>
   </ol>
   <h4>5. 수업 파일에서 저장한 자리를 사이트로 옮기기</h4>
@@ -526,9 +536,11 @@ function fixEntry(h) {
   }
   const e = { id: h.id || uid(), date, memo: typeof h.memo === "string" ? h.memo.slice(0, 60) : "", at: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(at) ? at : date + " 00:00", map: h.map };
   if (typeof h.t === "number" && isFinite(h.t)) e.t = h.t;
+  if (h.skip === true) e.skip = true;   // 저장할 때 '다음 뽑기 때 이 자리의 짝 피하기'를 끈 자리
   if (h.lay && +h.lay.rows > 0 && +h.lay.cols > 0) e.lay = { rows: +h.lay.rows, cols: +h.lay.cols, group: +h.lay.group || 1, vgroup: +h.lay.vgroup || 1, off: Array.isArray(h.lay.off) ? h.lay.off.slice() : [] };
   return e;
 }
+const avoidSrc = c => c.history.find(h => !h.skip) || null;   // 짝 피하기에 쓰는 자리: '짝 피하기'를 켜 둔 가장 최근 자리
 function sortHist(c) {   // 날짜 → 저장한 때 순(최근이 위). 같은 분이면 밀리초(t)로, 그것도 없으면 id(만든 시각이 앞에 들어 있음)로
   c.history.sort((a, b) => a.date !== b.date ? (a.date < b.date ? 1 : -1) : a.at !== b.at ? (a.at < b.at ? 1 : -1)
     : ((b.t || 0) - (a.t || 0)) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
@@ -706,7 +718,7 @@ function solve(c = C()) {
     : lv === 3 ? s.desk !== t.desk && Math.max(Math.abs((s.y ?? s.r) - (t.y ?? t.r)), Math.abs(s.x - t.x)) > 2.05
     : s.desk !== t.desk && !near(s, t);
   const gender = Object.fromEntries(ss.map(s => [s.id, s.g]));
-  const last = c.history[0] ? c.history[0].map : null;   // 가장 최근 날짜에 저장한 자리
+  const src = avoidSrc(c), last = src ? src.map : null;   // '짝 피하기'를 켜 두고 저장한 가장 최근 자리
   const lastPartner = {};
   if (last) { const inv = {}; for (const [k, id] of Object.entries(last)) inv[id] = k;
     const all = seatList(c); const ak = Object.fromEntries(all.map(s => [s.key, s]));
@@ -902,20 +914,43 @@ function revealNext() {
   if (!revealQueue.length) { c.current = pendingMap; pendingMap = null; save(); $("#btnNext").hidden = true; $("#btnKeep").hidden = false; layout(); setTimeout(() => document.querySelectorAll(".seat.spot").forEach(e => e.classList.remove("spot")), 2400); }
 }
 
+/* ---------------- 내 설정: 이 기기에만 (개선 메모 처리 기준 2026-11-10) ----------------
+   여러 선생님이 같은 사이트를 쓰므로, 개선 메모의 새 기능·취향(글자·문구·배치 등)은 모두의 기본을 바꾸지 않고
+   MY_OPTS 에 기본 꺼짐 항목으로 더한다. 켜면 body 에 'my-<key>' 가 붙으므로 CSS 는 body.my-<key> … 로, 코드는 my("<key>") 로 본다. */
+const MY_KEY = "seatdraw.my";
+const MY_OPTS = [   // { key, label, hint } — 메모 시각을 주석으로 남긴다
+];
+function myGet() { try { const o = JSON.parse(localStorage.getItem(MY_KEY) || "{}"); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; } }
+const my = k => !!myGet()[k];
+function applyMy() { for (const o of MY_OPTS) document.body.classList.toggle("my-" + o.key, my(o.key)); }
+function renderMy() {
+  const box = $("#myList"); if (!box) return; box.innerHTML = "";
+  if (!MY_OPTS.length) { box.appendChild(el("p", "hint", "아직 고를 것이 없어요.")); return; }
+  for (const o of MY_OPTS) {
+    const lab = el("label", "check"); const i = el("input"); i.type = "checkbox"; i.checked = my(o.key);
+    i.onchange = () => { const v = myGet(); if (i.checked) v[o.key] = true; else delete v[o.key];
+      try { localStorage.setItem(MY_KEY, JSON.stringify(v)); } catch (e) {} applyMy(); if (typeof render === "function") render(); };
+    lab.append(i, document.createTextNode(o.label)); box.appendChild(lab);
+    if (o.hint) box.appendChild(el("p", "hint", o.hint));
+  }
+}
+
 /* ---------------- 날짜별로 저장한 자리 ---------------- */
 const layOf = c => ({ rows: c.rows, cols: c.cols, group: c.group, vgroup: c.vgroup || 1, off: c.off.slice() });
 function keep() {
   const c = C(); if (!c.current || !Object.keys(c.current).length) { toast("먼저 자리를 뽑거나 저장한 자리를 불러와 주세요."); return; }
   ask("이 자리 저장하기", "날짜와 메모를 붙여 저장해요. '저장한 자리'에서 언제든 다시 불러올 수 있어요.", null,
-    [["저장", (_, v) => keepAs(v.date, v.memo)]],
-    [{ key: "date", label: "날짜", type: "date", value: today() }, { key: "memo", label: "메모 (안 써도 돼요)", value: "", placeholder: "예: 2학기 첫 자리", max: 60 }]);
+    [["저장", (_, v) => keepAs(v.date, v.memo, v.avoid)]],
+    [{ key: "date", label: "날짜", type: "date", value: today() }, { key: "memo", label: "메모 (안 써도 돼요)", value: "", placeholder: "예: 2학기 첫 자리", max: 60 },
+     { key: "avoid", label: "다음 뽑기 때 이 자리의 짝 피하기", type: "checkbox", value: true }]);
 }
-function keepAs(date, memo) {
+function keepAs(date, memo, avoid = true) {
   const c = C(); if (!c.current) return;
   date = isDate(date) ? date : today(); memo = String(memo || "").trim().slice(0, 60);
   const entry = { id: uid(), date, memo, at: stamp(), t: Date.now(), map: clone(c.current), lay: layOf(c) };
+  if (avoid === false) entry.skip = true;
   const done = msg => { sortHist(c); c.loadedId = entry.id; save(); $("#btnKeep").hidden = true; renderHist(); renderSaved();
-    toast(msg + (c.history[0] === entry && c.prev !== false ? " 다음 뽑기 때 이 자리의 짝을 피해요." : "")); };
+    toast(msg + (entry.skip ? " 이 자리의 짝은 다음 뽑기 때 피하지 않아요." : avoidSrc(c) === entry && c.prev !== false ? " 다음 뽑기 때 이 자리의 짝을 피해요." : "")); };
   const same = c.history.filter(h => h.date === date);
   if (!same.length) { c.history.push(entry); done(`${fmtDate(date)} 자리로 저장했어요.`); return; }
   const label = h => `'${h.memo || "메모 없음"}'(저장 ${h.at.slice(11)})`;
@@ -944,17 +979,22 @@ function openSaved() { renderSaved(); $("#savedM").classList.add("open"); }
 function renderSaved() {
   const box = $("#savedList"); box.innerHTML = ""; const c = C();
   if (!c.history.length) { box.appendChild(el("p", "hint", "아직 저장한 자리가 없어요. 자리를 뽑은 뒤 '이 자리로 정하기'를 누르면 날짜와 함께 여기 남아요.")); return; }
-  let month = "";
-  c.history.forEach((h, i) => {
+  let month = ""; const src = c.prev !== false ? avoidSrc(c) : null;
+  c.history.forEach(h => {
     const m = h.date.slice(0, 7); if (m !== month) { month = m; box.appendChild(el("div", "sv-month", `${+m.slice(0, 4)}년 ${+m.slice(5)}월`)); }
     const row = el("div", "sv" + (h.id === c.loadedId ? " now" : ""));
     const info = el("div");
     const d = el("div", "sv-date", fmtDate(h.date)); d.appendChild(el("small", "", h.date.slice(0, 4))); info.appendChild(d);
     info.appendChild(el("div", "sv-memo" + (h.memo ? "" : " none"), h.memo || "메모 없음"));
     const meta = [`${Object.keys(h.map).length}명`, `저장 ${h.at.slice(5).replace("-", "/")}`];
-    if (i === 0 && c.prev !== false) meta.push("다음 뽑기 때 이 자리의 짝을 피해요");
+    if (h === src) meta.push("다음 뽑기 때 이 자리의 짝을 피해요");
     if (h.id === c.loadedId) meta.push("지금 화면");
     info.appendChild(el("div", "sv-meta", meta.join(" · ")));
+    const av = el("label", "check sv-avoid"); const ai = el("input"); ai.type = "checkbox"; ai.checked = !h.skip;
+    ai.onchange = () => { if (ai.checked) delete h.skip; else h.skip = true; save(); renderSaved();
+      toast(ai.checked ? (avoidSrc(c) === h ? (c.prev !== false ? "다음 뽑기 때 이 자리의 짝을 피해요." : "켰어요. 설정의 '지난번 짝과 다시 짝이 되지 않게'가 꺼져 있어 지금은 쓰지 않아요.") : "켰어요. 더 최근에 '짝 피하기'를 켠 자리가 있어서 그 자리를 먼저 써요.")
+        : "이 자리의 짝은 다음 뽑기 때 피하지 않아요."); };
+    av.append(ai, document.createTextNode("다음 뽑기 때 이 자리의 짝 피하기")); info.appendChild(av);
     const acts = el("div", "sv-acts");
     const b1 = el("button", "btn primary", "불러오기"); b1.onclick = () => loadEntry(h);
     const b2 = el("button", "btn", "이름 바꾸기"); b2.onclick = () => ask("이름 바꾸기", "날짜와 메모를 고칠 수 있어요.", null,
@@ -974,7 +1014,7 @@ function renderHist() {   // 서랍의 요약과 단추 옆 개수
 /* ---------------- 사이트·자리표 파일로 옮기기 (비밀 규칙은 넣지 않음) ---------------- */
 function payload(c = C()) {
   return { app: "jari", v: 1, name: c.name, roster: c.roster,
-    history: c.history.map(h => { const o = { date: h.date, memo: h.memo, at: h.at, map: h.map }; if (h.t) o.t = h.t; if (h.lay) o.lay = h.lay; return o; }) };
+    history: c.history.map(h => { const o = { date: h.date, memo: h.memo, at: h.at, map: h.map }; if (h.t) o.t = h.t; if (h.skip) o.skip = true; if (h.lay) o.lay = h.lay; return o; }) };
 }
 function b64u(s) { const by = new TextEncoder().encode(s); let bin = ""; for (let i = 0; i < by.length; i += 0x8000) bin += String.fromCharCode.apply(null, by.subarray(i, i + 0x8000)); return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
 function unb64u(s) { s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "="; const bin = atob(s); const by = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) by[i] = bin.charCodeAt(i); return new TextDecoder().decode(by); }
@@ -1082,6 +1122,7 @@ function bindSet() {
   $("#fGroup").onchange = e => { c().group = +e.target.value; c().current = null; save(); render(); };
   $("#fMix").onchange = e => { c().mix = e.target.checked; save(); };
   $("#fPrev").onchange = e => { c().prev = e.target.checked; save(); };
+  renderMy(); applyMy();
   document.querySelectorAll("#segReveal button").forEach(b => b.onclick = () => { c().reveal = b.dataset.v; save(); fillSet(); });
   $("#btnEditOff").onclick = () => { editingOff = !editingOff; $("#btnEditOff").textContent = editingOff ? "빈자리 고르기 끝" : "빈자리 고르기"; if (editingOff) openSet(false); render(); toast(editingOff ? "비울 책상을 누르세요. 다 했으면 설정에서 '빈자리 고르기 끝'." : "빈자리를 저장했어요."); };
   $("#btnNewCls").onclick = () => { const id = "c" + Date.now(); S.classes[id] = newClass("새 학급"); S.active = id; save(); fillPick(); fillSet(); render(); };
@@ -1246,12 +1287,16 @@ function ask(title, text, area, actions, fields) {
   const a = $("#mArea"); a.hidden = area == null; a.value = area || "";
   const fb = $("#mFields"); fb.innerHTML = ""; const inputs = {};
   for (const f of fields || []) {
+    if (f.type === "checkbox") {
+      const lab = el("label", "check"); const i = el("input"); i.type = "checkbox"; i.checked = f.value !== false;
+      lab.append(i, document.createTextNode(f.label)); fb.appendChild(lab); inputs[f.key] = i; continue;
+    }
     const lab = el("label", "field"); lab.appendChild(document.createTextNode(f.label));
     const i = el("input"); i.type = f.type || "text"; i.value = f.value || ""; if (f.placeholder) i.placeholder = f.placeholder; if (f.max) i.maxLength = f.max;
     lab.appendChild(i); fb.appendChild(lab); inputs[f.key] = i;
   }
   fb.hidden = !(fields && fields.length);
-  const vals = () => Object.fromEntries(Object.entries(inputs).map(([k, i]) => [k, i.value]));
+  const vals = () => Object.fromEntries(Object.entries(inputs).map(([k, i]) => [k, i.type === "checkbox" ? i.checked : i.value]));
   const bx = $("#mBtns"); bx.innerHTML = ""; const close = () => $("#modal").classList.remove("open");
   let first = null;
   actions.forEach(([label, fn, kind], i) => {
@@ -1560,6 +1605,22 @@ body.class-mode #memoBtn, body.printing #memoBtn { display: none; }
   const ENTRY = "entry.840724152";         // entry.<숫자>  ('메모' 질문)
   const STATUS = "memo_status.json";   // 공개 파일: 글의 해시 → {state, reply, at} — 메모 글은 없음(관리자만 시트에서 봄)
   const KEYM = "seatdraw.memo.mine";     // 이 기기에서 쓴 내 메모: [{text, at}]
+  const KEYA = "seatdraw.memo.admin";    // 관리자 표시 코드(이 브라우저에만). '#admin=<코드>' 로 들어오면 저장하고 주소의 # 를 지움, '#admin=off' 면 지움.
+  let admin = "";
+  const readAdmin = () => {   // 코드 값은 사이트·저장소에 없음 — 맞는지는 Claude 의 memo.py 가 이 PC 의 memo_admin.json 으로 확인
+    try {
+      const m = /^#admin=([A-Za-z0-9_-]{1,64})$/.exec(location.hash || "");
+      if (m) {
+        if (m[1] === "off") localStorage.removeItem(KEYA); else localStorage.setItem(KEYA, m[1]);
+        try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { location.hash = ""; }
+      }
+      admin = localStorage.getItem(KEYA) || "";
+    } catch (e) { admin = ""; }
+    const n = document.querySelector("#memoPane .note"); if (!n) return;
+    const old = n.querySelector(".adm"); if (old) old.remove();
+    if (admin) { const sp = document.createElement("span"); sp.className = "adm"; sp.textContent = " 이 브라우저는 관리자 메모로 보내요."; n.appendChild(sp); }
+  };
+  readAdmin(); addEventListener("hashchange", () => { if (/^#admin=/.test(location.hash)) readAdmin(); });
   const $ = s => document.querySelector(s);
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const btn = $("#memoBtn"), pane = $("#memoPane"), list = $("#memoList"), ta = $("#memoText"), send = $("#memoSend"), hint = $("#memoHint");
@@ -1600,7 +1661,7 @@ body.class-mode #memoBtn, body.printing #memoBtn { display: none; }
     e.preventDefault(); const text = ta.value.trim(); if (!text) return;
     send.disabled = true; hint.textContent = "보내는 중…";
     try {
-      const body = new URLSearchParams(); body.append(ENTRY, text);
+      const body = new URLSearchParams(); body.append(ENTRY, admin ? text + " [A:" + admin + "]" : text);   // 꼬리표는 보내는 글에만(내 메모 목록엔 안 보임)
       await fetch(FORM_ACTION, { method: "POST", mode: "no-cors", body });   // 구글 설문지는 응답을 읽을 수 없게 돌려줌(no-cors) — 보내기만 함
       const a = mine(); a.push({ text, at: Date.now() }); setMine(a);
       ta.value = ""; hint.textContent = "남겼어요. 고마워요!";

@@ -1413,12 +1413,12 @@ async function readFile(f) {
 function setClassMode(on) {
   classMode = on; document.body.classList.toggle("class-mode", on);
   openSet(false); openSecret(false); editingOff = false; $("#btnEditOff").textContent = "빈자리 고르기"; $("#savedM").classList.remove("open");
-  const c = C(); if (on) { c.current = null; c.loadedId = null; }
+  const c = C(); if (on && !c.loadedId) c.current = null;   // 불러온 저장 자리는 그대로 수업 화면에 (개선 메모 2026-11-13: 저장한 자리에서 수업 화면으로 가면 이름이 사라짐)
   resetDock(); $("#btnDraw").hidden = false; $("#btnDraw").textContent = "자리 뽑기";
   render(); if (on) wake();
 }
 function classFile() {
-  const c = clone(C()); c.current = null; delete c.loadedId; delete c.idmap;
+  const c = clone(C()); if (!c.loadedId) c.current = null; delete c.idmap;   // 불러온 저장 자리는 수업 파일에서도 처음에 보임
   c.made = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);   // 같은 파일인지 알아보는 표
   const data = JSON.stringify(btoa(unescape(encodeURIComponent(JSON.stringify(c)))).split("").reverse().join(""));
   let html = ORIGINAL;
